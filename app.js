@@ -59,8 +59,8 @@ app.delete('/upload', (req, res) => {
 });
 
 app.post('/pin', (req, res) => {
-  const { fileName } = req.body.fileName;
-  console.log(req.body);
+  const { fileName } = req.body;
+  console.log(fileName);
   res.json('ok');
 });
 
