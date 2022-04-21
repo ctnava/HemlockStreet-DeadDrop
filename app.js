@@ -4,13 +4,19 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const fs = require('fs');
 const md5 = require('md5');
-const IPFS = require('ipfs-core');
+import { create } from "ipfs-http-client";
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
-const CryptoJS = require("crypto-js");
 
-const ipfs = IPFS.create().then((res) => {return res});
-async function connectMongoDB() { await mongoose.connect('mongodb://localhost:27017/dstorDB') }
+const ipfsCredentials = { 
+  host: process.env.IPFS_HOST, 
+  port: process.env.IPFS_PORT, 
+  protocol: process.env.IPFS_PROTOCOL 
+};
+const ipfs = create(ipfsCredentials);
+ipfs.version().then((version) => { console.log(version, "IPFS Node Ready"); });
+
+async function connectMongoDB() { await mongoose.connect(process.env.DB_URL + '/deadDropDB') }
 connectMongoDB().catch(err => console.log(err));
 
 const pinSchema = new mongoose.Schema({
@@ -33,7 +39,7 @@ const app = express();
 app.use(bodyParser.raw({type: 'application/octet-stream', limit:'10gb'}));
 app.use(bodyParser.json());
 
-app.use(cors({origin: 'http://localhost:3000'}));
+app.use(cors({origin: process.env.CLIENT_URL}));
 
 app.use('/uploads', express.static('uploads'));
 
@@ -43,7 +49,7 @@ app.use('/uploads', express.static('uploads'));
 app.post('/upload', (req, res) => {
   const { chunk, ext, chunkIndex, totalChunks } = JSON.parse(req.body.toString());
   const chunkNum = (parseInt(chunkIndex) + 1);
-  const progress = (chunkNum / parseInt(totalChunks)) * 100;
+  // const progress = (chunkNum / parseInt(totalChunks)) * 100;
 
   const rawChunk = chunk.split(',')[1];
   const buffer = (Buffer.from(rawChunk, 'base64')); // console.log(buffer.length/1024);
@@ -100,45 +106,36 @@ app.delete('/upload', (req, res) => {
   }
 });
 
+
+const { makeKey, quickEncrypt} = require("./lib/utils/encryption");
 app.post('/pin', (req, res) => {
   const { fileName, contractMetadata, contractInput } = req.body;
   const finalPath = `./pinned/${fileName.split(".")[0]}`;
   fs.renameSync(`./uploads/${fileName}`, finalPath);
-  const fileObject = {
-    path: finalPath,
-    contents: fs.readFileSync(finalPath)
-  };
 
-  function makeKey(length) {
-    var result           = '';
-    var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*?';
-    var charactersLength = characters.length;
-    for ( var i = 0; i < length; i++ ) {
-      result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    }
-    return result;
-  }
-  function quickEncrypt(data, key) { return CryptoJS.AES.encrypt(data, key).toString() }
+  ipfs.add(fs.readFileSync(finalPath)).then((result) => {
+    ipfs.pin.add(result.path).then((err) => {
+      if (err) {console.log(err)}
+      else {
+        const secret = makeKey(2048);
+        const encryptedInputs = {
+          hash: quickEncrypt(upload.cid, secret),
+          size: contractInput.size,
+          type: quickEncrypt(contractInput.type, secret),
+          name: quickEncrypt(contractInput.name, secret),
+          description: quickEncrypt(contractInput.description, secret),
+          recipient: contractInput.recipient
+        };
 
-  ipfs.add(fileObject, { pin: true}).then((upload) => {
-    const secret = makeKey(2048);
-    const encryptedInputs = {
-      hash: quickEncrypt(upload.cid, secret),
-      size: contractInput.size,
-      type: quickEncrypt(contractInput.type, secret),
-      name: quickEncrypt(contractInput.name, secret),
-      description: quickEncrypt(contractInput.description, secret),
-      recipient: contractInput.recipient
-    };
-    const pin = new Pin({ plain: upload.cid, contract: contractMetadata });
-    const cid = new CID({ cipher: JSON.stringify(encryptedInputs.hash), secret: secret });
-    res.json(encryptedInputs);
+        const pin = new Pin({ plain: upload.cid, contract: contractMetadata });
+        const cid = new CID({ cipher: JSON.stringify(encryptedInputs.hash), secret: secret });
+
+        const response = { encryptedInputs: encryptedInputs, hash: result.path };
+        res.json(response);
+      }
+    });
   });
 });
-
-  // const lSecret = makeKey(2048);
-  // const eData = quickEncrypt("hash", lSecret);
-  // const dData = CryptoJS.AES.decrypt(eData, lSecret).toString(CryptoJS.enc.Utf8);
 
 
 app.listen(process.env.PORT || 4001, () => { console.log("Server started"); });
