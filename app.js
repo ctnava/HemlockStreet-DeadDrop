@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const fs = require('fs');
 const md5 = require('md5');
-import { create } from "ipfs-http-client";
+const { create } = require("ipfs-http-client");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
 
