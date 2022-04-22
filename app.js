@@ -8,6 +8,9 @@ const {create} = require("ipfs-http-client");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
 
+if (!fs.existsSync("./uploads")) { fs.mkdirSync("./uploads") }
+if (!fs.existsSync("./uploads/encrypted")) { fs.mkdirSync("./uploads/encrypted") }
+if (!fs.existsSync("./uploads/decrypted")) { fs.mkdirSync("./uploads/decrypted") }
 
 const ipfsCredentials = process.env.IPFS_PROJECT_ID+':'+process.env.IPFS_PROJECT_SECRET;
 const ipfsAuth = 'Basic ' + Buffer.from(ipfsCredentials).toString('base64');
@@ -94,7 +97,7 @@ app.delete('/upload', (req, res) => {
   }
   const pathTo = `./uploads/${fileName}`
   if (!fs.existsSync(pathTo)) { 
-    const altPath = `./pinned/${fileName.split(".")[0]}`;
+    const altPath = `./uploads/encrypted/${fileName.split(".")[0]}.zip`;
     if (!fs.existsSync(altPath)) { res.json("failed/notFound") }
     else {
       fs.unlinkSync(altPath);
@@ -109,12 +112,15 @@ app.delete('/upload', (req, res) => {
   }
 });
 
-const { makeKey, quickEncrypt, encryptFile, decryptFile, quickDecrypt } = require("./lib/utils/encryption");
+const archiver = require('archiver');
+archiver.registerFormat('zip-encrypted', require("archiver-zip-encrypted"));
+const { makeKey, quickEncrypt, quickDecrypt, encryptFile, decryptFile } = require("./lib/utils/encryption");
+encryptFile("advancedapisecurity.pdf", "1234");
+
 app.post('/pin', (req, res) => {
   const { fileName, contractMetadata, contractInput } = req.body;
-  const finalPath = `./uploads/encrypted/${fileName.split(".")[0]}`;
   const secret = makeKey(2048);
-  encryptFile(`./uploads/${fileName}`, finalPath, secret);
+  encryptFile(fileName, secret);
 
   ipfs.add(fs.readFileSync(finalPath)).then((result) => {
     ipfs.pin.add(result.path).then(() => {
@@ -129,17 +135,14 @@ app.post('/pin', (req, res) => {
       };
 
       const pin = new Pin({ plain: result.path, contract: contractMetadata });
+      pin.save();
       const cid = new CID({ cipher: JSON.stringify(encryptedInputs.hash), secret: secret });
+      cid.save();
 
       const response = { encryptedInputs: encryptedInputs, hash: result.path };
       res.json(response);
-      
     });
   });
 });
-
-const originalPdf = fs.readFileSync("./uploads/advancedapisecurity.pdf").toString();
-const decryptedPdf = decryptFile("./uploads/encrypted/advancedapisecurity", "./uploads/decrypted/advancedapisecurity.pdf", "1234")
-console.log(originalPdf ===  decryptedPdf)
 
 app.listen(process.env.PORT || 4001, () => { console.log("Server started"); });
