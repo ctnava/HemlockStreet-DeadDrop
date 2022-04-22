@@ -119,11 +119,10 @@ app.post('/transaction', (req, res) => {
   const chainId = parseInt(contractMetadata.chainId, 16);
   const isDev = chainId === 31337 || chainId === 1337;
   const provider = isDev ? new ethers.providers.JsonRpcProvider() : new ethers.providers.JsonRpcProvider(/*FILL ME IN*/);
-  console.log(req.body);
   const contract = new ethers.Contract(contractMetadata.contract, contractMetadata.abi, provider);
 
   const query = { plain: hash, cipher: cipher, contract: JSON.stringify(contractMetadata) };
-  contract.expDates(cipher).then(expBigNum => {
+  contract.expirationDates(cipher).then(expBigNum => {
     const expDate = parseInt(expBigNum.toString());
     if (expDate === 0) { 
       ipfs.pin.rm(hash).then(pin => { 
@@ -133,14 +132,7 @@ app.post('/transaction', (req, res) => {
     } else {
       Pin.updateOne(query, {expDate: expDate}, (err) => {
         if (err) { res.json(err) } 
-        else { 
-          Pin.findOne(query, (err, foundPin) => {
-            if (!err) { 
-              console.log(foundPin);
-              res.json("success");
-            } else { res.json(err) }
-          });
-        }
+        else { res.json("success") }
       });
     }
   });
