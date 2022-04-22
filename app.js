@@ -83,6 +83,7 @@ app.post('/pin', (req, res) => {
   
         const pin = new Pin({ 
           plain: result.path, 
+          cipher: encryptedInputs.hash, 
           contract: JSON.stringify(contractMetadata) 
         });
   
@@ -110,16 +111,42 @@ app.post('/unpin', (req, res) => {
   });
 });
 
+const { ethers } = require("ethers");
 // HANDLE TRANSACTION
 app.post('/transaction', (req, res) => {
-  const { hash, contractMetadata, tx } = req.body;
-  const query = { plain: hash, contract: JSON.stringify(contractMetadata) };
-  Pin.findOne(query, (err, foundPin) => {
-    if (err) {
-      res.json(err);
+  const { contractMetadata, hash, cipher } = req.body;
+
+  const chainId = parseInt(contractMetadata.chainId, 16);
+  const isDev = chainId === 31337 || chainId === 1337;
+  const provider = isDev ? new ethers.providers.JsonRpcProvider() : new ethers.providers.JsonRpcProvider(/*FILL ME IN*/);
+  console.log(req.body);
+  const contract = new ethers.Contract(contractMetadata.contract, contractMetadata.abi, provider);
+
+  const query = { plain: hash, cipher: cipher, contract: JSON.stringify(contractMetadata) };
+  contract.expDates(cipher).then(expBigNum => {
+    const expDate = parseInt(expBigNum.toString());
+    if (expDate === 0) { 
+      ipfs.pin.rm(hash).then(pin => { 
+        console.log("Removed Pin @ " + pin);
+        res.json("failure"); 
+      });
     } else {
-      console.log(foundPin);
-      res.json("success");
+      Pin.updateOne(query, {expDate: expDate}, (err) => {
+        if (err) { res.json(err) } 
+        else { 
+          Pin.findOne(query, (err, foundPin) => {
+            if (!err) { 
+              console.log(foundPin);
+              res.json("success");
+            } else { res.json(err) }
+          });
+        }
+      });
     }
-  })
+  });
 });
+
+// DECRYPT CIPHER
+app.post('/decrypt', (req, res) => {
+  res.json("success");
+})
