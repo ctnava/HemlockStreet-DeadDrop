@@ -100,4 +100,17 @@ app.post('/pin', (req, res) => {
     });
   });
 });
-// encryptFile("advancedapisecurity.pdf", "1234");
+
+// HANDLE UNPIN REQUEST
+app.post('/unpin', (req, res) => {
+  const { hash } = req.body.data;
+  ipfs.pin.rm(hash).then(pin => {
+    console.log("Removed Pin");
+    res.json("success");
+  });
+});
+
+// HANDLE TRANSACTION
+app.post('/transaction', (req, res) => {
+  const { hash, txhash } = req.body.data;
+});
