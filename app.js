@@ -105,12 +105,21 @@ app.post('/pin', (req, res) => {
 app.post('/unpin', (req, res) => {
   const { hash } = req.body.data;
   ipfs.pin.rm(hash).then(pin => {
-    console.log("Removed Pin");
+    console.log("Removed Pin @ " + pin);
     res.json("success");
   });
 });
 
 // HANDLE TRANSACTION
 app.post('/transaction', (req, res) => {
-  const { hash, txhash } = req.body.data;
+  const { hash, contractMetadata, tx } = req.body;
+  const query = { plain: hash, contract: JSON.stringify(contractMetadata) };
+  Pin.findOne(query, (err, foundPin) => {
+    if (err) {
+      res.json(err);
+    } else {
+      console.log(foundPin);
+      res.json("success");
+    }
+  })
 });
