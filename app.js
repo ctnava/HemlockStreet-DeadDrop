@@ -4,16 +4,19 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const fs = require('fs');
 const md5 = require('md5');
-const { create } = require("ipfs-http-client");
+const {create} = require("ipfs-http-client");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
 
-const ipfsCredentials = { 
-  host: process.env.IPFS_HOST, 
-  port: process.env.IPFS_PORT, 
-  protocol: process.env.IPFS_PROTOCOL 
-};
-const ipfs = create(ipfsCredentials);
+
+const ipfsCredentials = process.env.IPFS_PROJECT_ID+':'+process.env.IPFS_PROJECT_SECRET;
+const ipfsAuth = 'Basic ' + Buffer.from(ipfsCredentials).toString('base64');
+const ipfs = create({
+  host: process.env.IPFS_HOST,
+  port: process.env.IPFS_PORT,
+  protocol: process.env.IPFS_PROTOCOL,
+  headers: { authorization: ipfsAuth }
+  });
 ipfs.version().then((version) => { console.log(version, "IPFS Node Ready"); });
 
 async function connectMongoDB() { await mongoose.connect(process.env.DB_URL + '/deadDropDB') }
@@ -106,36 +109,37 @@ app.delete('/upload', (req, res) => {
   }
 });
 
-
-const { makeKey, quickEncrypt} = require("./lib/utils/encryption");
+const { makeKey, quickEncrypt, encryptFile, decryptFile, quickDecrypt } = require("./lib/utils/encryption");
 app.post('/pin', (req, res) => {
   const { fileName, contractMetadata, contractInput } = req.body;
-  const finalPath = `./pinned/${fileName.split(".")[0]}`;
-  fs.renameSync(`./uploads/${fileName}`, finalPath);
+  const finalPath = `./uploads/encrypted/${fileName.split(".")[0]}`;
+  const secret = makeKey(2048);
+  encryptFile(`./uploads/${fileName}`, finalPath, secret);
 
   ipfs.add(fs.readFileSync(finalPath)).then((result) => {
-    ipfs.pin.add(result.path).then((err) => {
-      if (err) {console.log(err)}
-      else {
-        const secret = makeKey(2048);
-        const encryptedInputs = {
-          hash: quickEncrypt(upload.cid, secret),
-          size: contractInput.size,
-          type: quickEncrypt(contractInput.type, secret),
-          name: quickEncrypt(contractInput.name, secret),
-          description: quickEncrypt(contractInput.description, secret),
-          recipient: contractInput.recipient
-        };
+    ipfs.pin.add(result.path).then(() => {
+      fs.unlinkSync(finalPath);
+      const encryptedInputs = {
+        hash: quickEncrypt(result.path, secret),
+        size: contractInput.size,
+        type: quickEncrypt(contractInput.type, secret),
+        name: quickEncrypt(contractInput.name, secret),
+        description: quickEncrypt(contractInput.description, secret),
+        recipient: contractInput.recipient
+      };
 
-        const pin = new Pin({ plain: upload.cid, contract: contractMetadata });
-        const cid = new CID({ cipher: JSON.stringify(encryptedInputs.hash), secret: secret });
+      const pin = new Pin({ plain: result.path, contract: contractMetadata });
+      const cid = new CID({ cipher: JSON.stringify(encryptedInputs.hash), secret: secret });
 
-        const response = { encryptedInputs: encryptedInputs, hash: result.path };
-        res.json(response);
-      }
+      const response = { encryptedInputs: encryptedInputs, hash: result.path };
+      res.json(response);
+      
     });
   });
 });
 
+const originalPdf = fs.readFileSync("./uploads/advancedapisecurity.pdf").toString();
+const decryptedPdf = decryptFile("./uploads/encrypted/advancedapisecurity", "./uploads/decrypted/advancedapisecurity.pdf", "1234")
+console.log(originalPdf ===  decryptedPdf)
 
 app.listen(process.env.PORT || 4001, () => { console.log("Server started"); });
