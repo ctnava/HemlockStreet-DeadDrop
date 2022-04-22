@@ -1,57 +1,25 @@
 require('dotenv').config();
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
 const fs = require('fs');
 const md5 = require('md5');
-const {create} = require("ipfs-http-client");
-const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
 
-if (!fs.existsSync("./uploads")) { fs.mkdirSync("./uploads") }
-if (!fs.existsSync("./uploads/encrypted")) { fs.mkdirSync("./uploads/encrypted") }
-if (!fs.existsSync("./uploads/decrypted")) { fs.mkdirSync("./uploads/decrypted") }
+const { initAll } = require("./lib/setup/all.js");
+initAll();
 
-const ipfsCredentials = process.env.IPFS_PROJECT_ID+':'+process.env.IPFS_PROJECT_SECRET;
-const ipfsAuth = 'Basic ' + Buffer.from(ipfsCredentials).toString('base64');
-const ipfs = create({
-  host: process.env.IPFS_HOST,
-  port: process.env.IPFS_PORT,
-  protocol: process.env.IPFS_PROTOCOL,
-  headers: { authorization: ipfsAuth }
-  });
-ipfs.version().then((version) => { console.log(version, "IPFS Node Ready"); });
+const { app } = require("./lib/setup/app.js");
+const { Pin, CID } = require("./lib/setup/mongoose.js");
+const { ipfs } = require("./lib/setup/ipfs.js");
 
-async function connectMongoDB() { await mongoose.connect(process.env.DB_URL + '/deadDropDB') }
-connectMongoDB().catch(err => console.log(err));
+const { 
+  makeKey, 
+  quickEncrypt, 
+  quickDecrypt, 
+  encryptInputs,
+  encryptFile, 
+  decryptFile 
+} = require("./lib/utils/encryption");
 
-const pinSchema = new mongoose.Schema({
-  plain: { type: String, required: true },
-  contract: { type: String, required: true }, // DStor.js
-  expDate: { type: Number } // DStor.js
-});
-pinSchema.plugin(encrypt, { secret: process.env.DECRYPTION_KEY, encryptedFields: ["contract", "expDate"] });
-const Pin = mongoose.model("pin", pinSchema);
 
-const cidSchema = new mongoose.Schema({
-  cipher: { type: String, required: true },
-  secret: { type: String, required: true }
-});
-cidSchema.plugin(encrypt, { secret: process.env.DECRYPTION_KEY, encryptedFields: ["secret"] });
-const CID = mongoose.model("cid", cidSchema);
-
-const app = express();
-
-app.use(bodyParser.raw({type: 'application/octet-stream', limit:'10gb'}));
-app.use(bodyParser.json());
-
-app.use(cors({origin: process.env.CLIENT_URL}));
-
-app.use('/uploads', express.static('uploads'));
-
-// app.set('view engine', 'ejs');
-// app.use(express.static("public"));
-
+// PROCESS INCOMING FILES
 app.post('/upload', (req, res) => {
   const { chunk, ext, chunkIndex, totalChunks } = JSON.parse(req.body.toString());
   const chunkNum = (parseInt(chunkIndex) + 1);
@@ -88,61 +56,48 @@ app.post('/upload', (req, res) => {
   } else {res.json({tmpName})}
 });
 
+// DELETE UPLOADED FILES AND TEMP FILES
 app.delete('/upload', (req, res) => {
   const { fileName } = req.body;
   if (fileName === undefined) { res.json("failed/undefined") }
-  else {
-    if (fileName.slice(0, 3) === "tmp") { console.log("Upload aborted! Clearing artifacts...") }
-    else { console.log("Deletion requested! Removing file..."); }
-  }
-  const pathTo = `./uploads/${fileName}`
-  if (!fs.existsSync(pathTo)) { 
-    const altPath = `./uploads/encrypted/${fileName.split(".")[0]}.zip`;
-    if (!fs.existsSync(altPath)) { res.json("failed/notFound") }
-    else {
-      fs.unlinkSync(altPath);
-      if (!fs.existsSync(altPath)) { res.json("success") }
-      else { res.json("failed/deletion"); }
-    }
-    
-  } else {
-    fs.unlinkSync(pathTo);
-    if (!fs.existsSync(pathTo)) { res.json("success") }
-    else { res.json("failed/deletion") }
-  }
+
+  const isTmp = (fileName.slice(0, 4) === "tmp_");
+  const message = isTmp ? "Upload aborted!" : "Deletion requested!";
+  console.log(message);
+
+  const pathTo = `./uploads/${fileName}`;
+  fs.unlinkSync(pathTo);
+  if (!fs.existsSync(pathTo)) { res.json("success") }
+  else { res.json("failed/deletion") }
 });
 
-const archiver = require('archiver');
-archiver.registerFormat('zip-encrypted', require("archiver-zip-encrypted"));
-const { makeKey, quickEncrypt, quickDecrypt, encryptFile, decryptFile } = require("./lib/utils/encryption");
-encryptFile("advancedapisecurity.pdf", "1234");
-
+// ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
 app.post('/pin', (req, res) => {
   const { fileName, contractMetadata, contractInput } = req.body;
-  const secret = makeKey(2048);
-  encryptFile(fileName, secret);
-
-  ipfs.add(fs.readFileSync(finalPath)).then((result) => {
-    ipfs.pin.add(result.path).then(() => {
-      fs.unlinkSync(finalPath);
-      const encryptedInputs = {
-        hash: quickEncrypt(result.path, secret),
-        size: contractInput.size,
-        type: quickEncrypt(contractInput.type, secret),
-        name: quickEncrypt(contractInput.name, secret),
-        description: quickEncrypt(contractInput.description, secret),
-        recipient: contractInput.recipient
-      };
-
-      const pin = new Pin({ plain: result.path, contract: contractMetadata });
-      pin.save();
-      const cid = new CID({ cipher: JSON.stringify(encryptedInputs.hash), secret: secret });
-      cid.save();
-
-      const response = { encryptedInputs: encryptedInputs, hash: result.path };
-      res.json(response);
+  const secret = makeKey(127);
+  encryptFile(fileName, secret).then((pathToArchive) => {
+    ipfs.add(fs.readFileSync(pathToArchive)).then((result) => {
+      ipfs.pin.add(result.path).then(() => {
+        fs.unlinkSync(pathToArchive);
+        const encryptedInputs = encryptInputs(result.path, contractInput, secret);
+  
+        const pin = new Pin({ 
+          plain: result.path, 
+          contract: JSON.stringify(contractMetadata) 
+        });
+  
+        const cid = new CID({ 
+          cipher: encryptedInputs.hash, 
+          secret: secret 
+        });
+  
+        pin.save();
+        cid.save();
+  
+        const response = { encryptedInputs: encryptedInputs, hash: result.path };
+        res.json(response);
+      });
     });
   });
 });
-
-app.listen(process.env.PORT || 4001, () => { console.log("Server started"); });
+// encryptFile("advancedapisecurity.pdf", "1234");

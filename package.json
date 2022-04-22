@@ -21,6 +21,7 @@
     "ipfs-http-client": "^56.0.2",
     "md5": "^2.3.0",
     "mongoose": "^6.3.0",
-    "mongoose-encryption": "^2.1.2"
+    "mongoose-encryption": "^2.1.2",
+    "unzipper": "^0.10.11"
   }
 }
