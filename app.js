@@ -62,7 +62,7 @@ app.delete('/upload', (req, res) => {
 });
 
 const { ipfs } = require("./lib/setup/ipfs.js");
-const { Pin, CID } = require("./lib/setup/mongoose.js");
+const { Pin, Cid } = require("./lib/setup/mongoose.js");
 const { garble, encryptInputs, encryptFile, decryptFile } = require("./lib/utils/encryption");
 
 // ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
@@ -82,7 +82,7 @@ app.post('/pin', (req, res) => {
           contract: JSON.stringify(contractMetadata) 
         });
   
-        const cid = new CID({ 
+        const cid = new Cid({ 
           cipher: encryptedInputs.hash, 
           secret: secret 
         });
@@ -91,6 +91,7 @@ app.post('/pin', (req, res) => {
         cid.save();
   
         const response = { encryptedInputs: encryptedInputs, hash: result.path };
+        console.log(encryptedInputs.hash);
         res.json(response);
       });
     });
@@ -136,7 +137,43 @@ app.post('/transaction', (req, res) => {
   });
 });
 
+// const { verifyMessage } = require('./lib/utils/blockchain.js');
+app.post('/decipher', (req, res) => {
+  const { cipher } = req.body;
+  function returnSecret() {
+    Cid.findOne({cipher: cipher}, (err, foundCid) => {
+      if (err) res.json("failure");
+      else res.json(foundCid.secret);
+    });
+  }
+  returnSecret();
+  // verifyMessage({ cipher, address, signature }).then((verdict) => {
+  //   if (verdict !== true) { res.json("failure") }
+  //   else {
+
+  //   }
+  // });
+});
+
 // DECRYPT CIPHER
-app.post('/decrypt', (req, res) => {
-  res.json("success");
+const { CID } = require("multiformats/cid");
+app.post('/download', (req, res) => {
+  const { cipher } = req.body;
+  Pin.findOne({cipher: cipher}, (err, foundPin) => {
+    if (err) res.json("failure");
+    else {
+      const cidString = foundPin.plain;
+      console.log(cidString)
+      const cid = CID.parse(cidString);
+
+      async function getData() {
+        let asyncitr = ipfs.get(cid);
+        for await (const itr of asyncitr) {
+          fs.appendFileSync("./downloads/download.zip", Buffer.from(itr));
+        }
+      }
+      
+      getData().then(() => {res.json("success")});
+    }
+  });
 })
