@@ -10,7 +10,7 @@ const { Pin, CID } = require("./lib/setup/mongoose.js");
 const { ipfs } = require("./lib/setup/ipfs.js");
 
 const { 
-  makeKey, 
+  garble,
   quickEncrypt, 
   quickDecrypt, 
   encryptInputs,
@@ -67,14 +67,17 @@ app.delete('/upload', (req, res) => {
 
   const pathTo = `./uploads/${fileName}`;
   fs.unlinkSync(pathTo);
-  if (!fs.existsSync(pathTo)) { res.json("success") }
+  const pathToGarbage = `./uploads/${fileName.split(".")[0]}.txt`;
+  if (fs.existsSync(pathToGarbage)) fs.unlinkSync(pathToGarbage);
+  if (!fs.existsSync(pathTo) && !fs.existsSync(pathToGarbage)) { res.json("success") }
   else { res.json("failed/deletion") }
 });
 
 // ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
 app.post('/pin', (req, res) => {
   const { fileName, contractMetadata, contractInput } = req.body;
-  const secret = makeKey(127);
+  const secret = garble(127);
+  console.log(secret);
   encryptFile(fileName, secret).then((pathToArchive) => {
     ipfs.add(fs.readFileSync(pathToArchive)).then((result) => {
       ipfs.pin.add(result.path).then(() => {
