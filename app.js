@@ -75,8 +75,9 @@ app.post('/pin', (req, res) => {
   encryptFile(fileName, secret).then((pathToArchive) => {
     ipfs.add(fs.readFileSync(pathToArchive)).then((result) => {
       ipfs.pin.add(result.path).then(() => {
-        // fs.unlinkSync(pathToArchive);
         const encryptedInputs = encryptInputs(result.path, contractInput, secret);
+        console.log(result.path); // COMMENT ME BEFORE PROD
+        console.log(encryptedInputs.hash); // COMMENT ME BEFORE PROD
   
         const pin = new Pin({ 
           plain: result.path, 
@@ -93,7 +94,6 @@ app.post('/pin', (req, res) => {
         cid.save();
   
         const response = { encryptedInputs: encryptedInputs, hash: result.path };
-        console.log(encryptedInputs.hash); // COMMENT ME BEFORE PROD
         res.json(response);
       });
     });
@@ -142,6 +142,14 @@ app.post('/transaction', (req, res) => {
     }
   });
 });
+
+// TODO 
+// FRONTEND - add extensions for time
+// BACKEND 
+// - implement message verification
+// - File corrupts just before upload to IPFS is complete (delay deletion?)
+// - Figure out Download from IPFS
+// - implement clientside decryption
 
 // const { verifyMessage } = require('./lib/utils/blockchain.js');
 app.post('/decipher', (req, res) => {
