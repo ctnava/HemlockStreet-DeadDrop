@@ -1,23 +1,11 @@
 require('dotenv').config();
 const fs = require('fs');
 const md5 = require('md5');
-
 const { initAll } = require("./lib/setup/all.js");
+
+
 initAll();
-
 const { app } = require("./lib/setup/app.js");
-const { Pin, CID } = require("./lib/setup/mongoose.js");
-const { ipfs } = require("./lib/setup/ipfs.js");
-
-const { 
-  garble,
-  quickEncrypt, 
-  quickDecrypt, 
-  encryptInputs,
-  encryptFile, 
-  decryptFile 
-} = require("./lib/utils/encryption");
-
 
 // PROCESS INCOMING FILES
 app.post('/upload', (req, res) => {
@@ -73,11 +61,15 @@ app.delete('/upload', (req, res) => {
   else { res.json("failed/deletion") }
 });
 
+const { ipfs } = require("./lib/setup/ipfs.js");
+const { Pin, CID } = require("./lib/setup/mongoose.js");
+const { garble, encryptInputs, encryptFile, decryptFile } = require("./lib/utils/encryption");
+
 // ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
 app.post('/pin', (req, res) => {
   const { fileName, contractMetadata, contractInput } = req.body;
   const secret = garble(127);
-  console.log(secret);
+  // console.log(secret);
   encryptFile(fileName, secret).then((pathToArchive) => {
     ipfs.add(fs.readFileSync(pathToArchive)).then((result) => {
       ipfs.pin.add(result.path).then(() => {
@@ -120,8 +112,11 @@ app.post('/transaction', (req, res) => {
   const { contractMetadata, hash, cipher } = req.body;
 
   const chainId = parseInt(contractMetadata.chainId, 16);
-  const isDev = chainId === 31337 || chainId === 1337;
-  const provider = isDev ? new ethers.providers.JsonRpcProvider() : new ethers.providers.JsonRpcProvider(/*FILL ME IN*/);
+  const isDev = (chainId === 31337 || chainId === 1337);
+  const provider = isDev ? 
+    new ethers.providers.JsonRpcProvider() : 
+    new ethers.providers.JsonRpcProvider(/*FILL ME IN*/);
+
   const contract = new ethers.Contract(contractMetadata.contract, contractMetadata.abi, provider);
 
   const query = { plain: hash, cipher: cipher, contract: JSON.stringify(contractMetadata) };
