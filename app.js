@@ -56,8 +56,10 @@ app.delete('/upload', (req, res) => {
   const pathTo = `./uploads/${fileName}`;
   fs.unlinkSync(pathTo);
   const pathToGarbage = `./uploads/${fileName.split(".")[0]}.txt`;
+  const pathToArchive = `./uploads/encrypted/${fileName.split(".")[0]}.zip`;
   if (fs.existsSync(pathToGarbage)) fs.unlinkSync(pathToGarbage);
-  if (!fs.existsSync(pathTo) && !fs.existsSync(pathToGarbage)) { res.json("success") }
+  if (fs.existsSync(pathToArchive)) fs.unlinkSync(pathToArchive);
+  if (!fs.existsSync(pathTo) && !fs.existsSync(pathToGarbage) && !fs.existsSync(pathToArchive)) { res.json("success") }
   else { res.json("failed/deletion") }
 });
 
@@ -69,11 +71,11 @@ const { garble, encryptInputs, encryptFile, decryptFile } = require("./lib/utils
 app.post('/pin', (req, res) => {
   const { fileName, contractMetadata, contractInput } = req.body;
   const secret = garble(127);
-  // console.log(secret);
+  console.log(secret); // COMMENT ME BEFORE PROD
   encryptFile(fileName, secret).then((pathToArchive) => {
     ipfs.add(fs.readFileSync(pathToArchive)).then((result) => {
       ipfs.pin.add(result.path).then(() => {
-        fs.unlinkSync(pathToArchive);
+        // fs.unlinkSync(pathToArchive);
         const encryptedInputs = encryptInputs(result.path, contractInput, secret);
   
         const pin = new Pin({ 
@@ -91,7 +93,7 @@ app.post('/pin', (req, res) => {
         cid.save();
   
         const response = { encryptedInputs: encryptedInputs, hash: result.path };
-        console.log(encryptedInputs.hash);
+        console.log(encryptedInputs.hash); // COMMENT ME BEFORE PROD
         res.json(response);
       });
     });
@@ -126,7 +128,11 @@ app.post('/transaction', (req, res) => {
     if (expDate === 0) { 
       ipfs.pin.rm(hash).then(pin => { 
         console.log("Removed Pin @ " + pin);
-        res.json("failure"); 
+        Pin.deleteOne({cipher: cipher}).then(() => {
+          Cid.deleteOne({cipher: cipher}).then(() => {
+            res.json("failure");
+          }).catch((err) => {res.json(err)});
+        }).catch((err) => {res.json(err)});
       });
     } else {
       Pin.updateOne(query, {expDate: expDate}, (err) => {
@@ -163,13 +169,16 @@ app.post('/download', (req, res) => {
     if (err) res.json("failure");
     else {
       const cidString = foundPin.plain;
-      console.log(cidString)
+      console.log(cidString); // COMMENT ME BEFORE PROD
       const cid = CID.parse(cidString);
+
+      if (fs.existsSync(`./downloads/${cidString}.zip`)) fs.unlinkSync(`./downloads/${cidString}.zip`);
 
       async function getData() {
         let asyncitr = ipfs.get(cid);
         for await (const itr of asyncitr) {
-          fs.appendFileSync("./downloads/download.zip", Buffer.from(itr));
+          console.log(itr);
+          fs.appendFileSync(`./downloads/${cidString}.zip`, Buffer.from(itr));
         }
       }
       
