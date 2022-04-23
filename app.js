@@ -1,114 +1,83 @@
 require('dotenv').config();
 const fs = require('fs');
-const md5 = require('md5');
-const { initAll } = require("./lib/setup/all.js");
-
-
-initAll();
+const { initAll } = require("./lib/setup/all.js"); initAll();
+const { uploadPaths } = require("./lib/utils/dirs.js");
+const { uploadLabels } = require("./lib/utils/labels.js");
+const { deleteFiles } = require("./lib/utils/deletion.js");
 const { app } = require("./lib/setup/app.js");
 
+
 // PROCESS INCOMING FILES
-app.post('/upload', (req, res) => {
-  const { chunk, ext, chunkIndex, totalChunks } = JSON.parse(req.body.toString());
-  const chunkNum = (parseInt(chunkIndex) + 1);
-  // const progress = (chunkNum / parseInt(totalChunks)) * 100;
+const { decomposeUploadInput, showProgress } = require("./lib/utils/routes/upload.js");
+app.route('./upload')
+  .post((req, res) => {
+    const { ext, chunk, chunkIndex, totalChunks } = JSON.parse(req.body.toString());
+    // idx, num, tot, isFirst, isLast, percent, contents
+    const dataChunk = decomposeUploadInput(chunk, chunkIndex, totalChunks);
+    // showProgress(dataChunk.num, dataChunk.idx, dataChunk.percent);
 
-  const rawChunk = chunk.split(',')[1];
-  const buffer = (Buffer.from(rawChunk, 'base64')); // console.log(buffer.length/1024);
-
-  function addExt(fileName) { return `${fileName}.${ext}` }
-  const tmpName = addExt('tmp_' + md5(req.ip + totalChunks));
-  const finalName = addExt(md5(Date.now() + req.ip)); // console.log(tmpName, finalName);
-
-  function uploadPath(fileName) { return `./uploads/${fileName}` }
-  const tmpPath = uploadPath(tmpName);
-  const finalPath = uploadPath(finalName); // console.log(tmpPath, finalPath);
-
-  const firstChunk = (chunkIndex === 0);
-  if (firstChunk) {
-    if (fs.existsSync(tmpPath)) {
-      console.log("Duplicate Deleted!");
-      fs.unlinkSync(tmpPath); 
+    // tmp, prev, trash, zip
+    const nameFor = uploadLabels(ext, req.ip, totalChunks); 
+    const pathTo = uploadPaths(nameFor);
+    
+    if (dataChunk.isFirst) {
+      if (fs.existsSync(pathTo.tmp)) {
+        // console.log("Duplicate Deleted!");
+        fs.unlinkSync(pathTo.tmp); 
+      }
+      // console.log("Downloading Document...");
     }
-    console.log("Downloading Document...");
-  }
 
-  fs.appendFileSync(tmpPath, buffer);
-  // console.log(`Getting Chunk ${chunkNum} of ${totalChunks} || ${progress}%`);
-  
-  const lastChunk = (chunkNum === parseInt(totalChunks));
-  if (lastChunk) {
-    console.log("Document Received!");
-    fs.renameSync(tmpPath, finalPath);
-    res.json({finalName});
-  } else {res.json({tmpName})}
-});
+    fs.appendFileSync(pathTo.tmp, dataChunk.contents);
 
-// DELETE UPLOADED FILES AND TEMP FILES
-app.delete('/upload', (req, res) => {
-  const { fileName } = req.body;
-  if (fileName === undefined) { res.json("failed/undefined") }
+    if (dataChunk.isLast) {
+      // console.log("Document Downloaded!");
+      fs.renameSync(pathTo.tmp, pathTo.prev);
+    }
+    
+    // clientside needs update here to fix
+    if (dataChunk.isLast) {
+      const finalName = nameFor.prev;
+      res.json({finalName});
+    } else {
+      const tmpName = nameFor.tmp;
+      res.json({tmpName});
+    }
+  })
+  .delete((req, res) => {deleteFiles(req.body.fileName, "upload", res)});
 
-  const isTmp = (fileName.slice(0, 4) === "tmp_");
-  const message = isTmp ? "Upload aborted!" : "Deletion requested!";
-  console.log(message);
-
-  const pathTo = `./uploads/${fileName}`;
-  fs.unlinkSync(pathTo);
-  const pathToGarbage = `./uploads/${fileName.split(".")[0]}.txt`;
-  const pathToArchive = `./uploads/encrypted/${fileName.split(".")[0]}.zip`;
-  if (fs.existsSync(pathToGarbage)) fs.unlinkSync(pathToGarbage);
-  if (fs.existsSync(pathToArchive)) fs.unlinkSync(pathToArchive);
-  if (!fs.existsSync(pathTo) && !fs.existsSync(pathToGarbage) && !fs.existsSync(pathToArchive)) { res.json("success") }
-  else { res.json("failed/deletion") }
-});
+// ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
+const { garble } = require("./lib/utils/encryption");
+const { uploadEncrypted, saveNewEntry, unpin } = require("./lib/utils/routes/pin.js");
+app.route('/pin')
+  .post((req, res) => {
+    const { fileName, contractMetadata, contractInput } = req.body;
+    const secret = garble(127);
+    console.log(secret); // COMMENT ME BEFORE PROD
+    uploadEncrypted(fileName, secret).then(pathTo => {
+      const entry = [
+        pathTo, 
+        JSON.stringify(contractMetadata), 
+        JSON.stringify(contractInput), 
+        secret
+      ];
+      const { response, pin, cid } = saveNewEntry(...entry);
+      res.json(response);
+    });
+  })
+  .delete((req, res) => {
+    const { hash, cipher } = req.body;
+    console.log(req.body);
+    unpin(hash, cipher, res)
+      .then(() => {res.json("success")})
+      .catch(err => {
+        console.log(err);
+        res.json("err: unpin @ app.post('/unpin')");
+    });
+  });
 
 const { ipfs } = require("./lib/setup/ipfs.js");
 const { Pin, Cid } = require("./lib/setup/mongoose.js");
-const { garble, encryptInputs, encryptFile, decryptFile } = require("./lib/utils/encryption");
-
-// ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
-app.post('/pin', (req, res) => {
-  const { fileName, contractMetadata, contractInput } = req.body;
-  const secret = garble(127);
-  console.log(secret); // COMMENT ME BEFORE PROD
-  encryptFile(fileName, secret).then((pathToArchive) => {
-    ipfs.add(fs.readFileSync(pathToArchive)).then((result) => {
-      ipfs.pin.add(result.path).then(() => {
-        const encryptedInputs = encryptInputs(result.path, contractInput, secret);
-        console.log(result.path); // COMMENT ME BEFORE PROD
-        console.log(encryptedInputs.hash); // COMMENT ME BEFORE PROD
-  
-        const pin = new Pin({ 
-          plain: result.path, 
-          cipher: encryptedInputs.hash, 
-          contract: JSON.stringify(contractMetadata) 
-        });
-  
-        const cid = new Cid({ 
-          cipher: encryptedInputs.hash, 
-          secret: secret 
-        });
-  
-        pin.save();
-        cid.save();
-  
-        const response = { encryptedInputs: encryptedInputs, hash: result.path };
-        res.json(response);
-      });
-    });
-  });
-});
-
-// HANDLE UNPIN REQUEST
-app.post('/unpin', (req, res) => {
-  const { hash } = req.body.data;
-  ipfs.pin.rm(hash).then(pin => {
-    console.log("Removed Pin @ " + pin);
-    res.json("success");
-  });
-});
-
 const { ethers } = require("ethers");
 // HANDLE TRANSACTION
 app.post('/transaction', (req, res) => {
@@ -130,13 +99,13 @@ app.post('/transaction', (req, res) => {
         console.log("Removed Pin @ " + pin);
         Pin.deleteOne({cipher: cipher}).then(() => {
           Cid.deleteOne({cipher: cipher}).then(() => {
-            res.json("failure");
-          }).catch((err) => {res.json(err)});
-        }).catch((err) => {res.json(err)});
+            res.json("err: failure to pay");
+          }).catch((err) => {res.json("err: Cid.deleteOne @ app.post('/transaction') || ", err)});
+        }).catch((err) => {res.json("err: Pin.deleteOne @ app.post('/transaction') || ", err)});
       });
     } else {
       Pin.updateOne(query, {expDate: expDate}, (err) => {
-        if (err) { res.json(err) } 
+        if (err) { res.json("err: Pin.updateOne @ app.post('/transaction') || ", err) } 
         else { res.json("success") }
       });
     }
@@ -156,7 +125,7 @@ app.post('/decipher', (req, res) => {
   const { cipher } = req.body;
   function returnSecret() {
     Cid.findOne({cipher: cipher}, (err, foundCid) => {
-      if (err) res.json("failure");
+      if (err) res.json("err: Cid.findOne @ app.post('/decipher') || ", err);
       else res.json(foundCid.secret);
     });
   }
@@ -174,7 +143,7 @@ const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
   Pin.findOne({cipher: cipher}, (err, foundPin) => {
-    if (err) res.json("failure");
+    if (err) res.json("err: Pin.findOne @ app.post('/download') || ", err);
     else {
       const cidString = foundPin.plain;
       console.log(cidString); // COMMENT ME BEFORE PROD
