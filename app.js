@@ -53,7 +53,7 @@ app.route('/upload')
 app.route('/pin')
   .post((req, res) => {
     const { fileName, contractMetadata, contractInput } = req.body;
-    // console.log(fileName);
+    console.log(contractInput);
     const nameOf = uploadedLabels(fileName);
     const pathTo = uploadedPaths(nameOf);
     const secret = garble(127);
@@ -61,7 +61,7 @@ app.route('/pin')
     uploadEncrypted(fileName, secret).then(cid => {
       fs.unlinkSync(pathTo.trash);
       fs.unlinkSync(pathTo.file);
-      const entry = [cid, JSON.stringify(contractMetadata), JSON.stringify(contractInput), secret];
+      const entry = [cid, JSON.stringify(contractMetadata), contractInput, secret];
       saveAndValidate(entry, res);
     });
   })
