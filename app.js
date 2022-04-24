@@ -1,15 +1,17 @@
 require('dotenv').config();
 const fs = require('fs');
 const { initAll } = require("./lib/setup/all.js"); initAll();
-const { uploadPaths } = require("./lib/utils/dirs.js");
-const { uploadLabels } = require("./lib/utils/labels.js");
+const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
+const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
+const { garble } = require("./lib/utils/encryption");
+const { uploadEncrypted, saveAndValidate, unpin } = require("./lib/utils/routes/pin.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
 const { app } = require("./lib/setup/app.js");
 
 
 // PROCESS INCOMING FILES
 const { decomposeUploadInput, showProgress } = require("./lib/utils/routes/upload.js");
-app.route('./upload')
+app.route('/upload')
   .post((req, res) => {
     const { ext, chunk, chunkIndex, totalChunks } = JSON.parse(req.body.toString());
     // idx, num, tot, isFirst, isLast, percent, contents
@@ -46,28 +48,26 @@ app.route('./upload')
   })
   .delete((req, res) => {deleteFiles(req.body.fileName, "upload", res)});
 
+
 // ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
-const { garble } = require("./lib/utils/encryption");
-const { uploadEncrypted, saveNewEntry, unpin } = require("./lib/utils/routes/pin.js");
 app.route('/pin')
   .post((req, res) => {
     const { fileName, contractMetadata, contractInput } = req.body;
+    // console.log(fileName);
+    const nameOf = uploadedLabels(fileName);
+    const pathTo = uploadedPaths(nameOf);
     const secret = garble(127);
-    console.log(secret); // COMMENT ME BEFORE PROD
-    uploadEncrypted(fileName, secret).then(pathTo => {
-      const entry = [
-        pathTo, 
-        JSON.stringify(contractMetadata), 
-        JSON.stringify(contractInput), 
-        secret
-      ];
-      const { response, pin, cid } = saveNewEntry(...entry);
-      res.json(response);
+    console.log("secret", secret); // COMMENT ME BEFORE PROD
+    uploadEncrypted(fileName, secret).then(cid => {
+      fs.unlinkSync(pathTo.trash);
+      fs.unlinkSync(pathTo.file);
+      const entry = [cid, JSON.stringify(contractMetadata), JSON.stringify(contractInput), secret];
+      saveAndValidate(entry, res);
     });
   })
   .delete((req, res) => {
     const { hash, cipher } = req.body;
-    console.log(req.body);
+    // console.log(req.body);
     unpin(hash, cipher, res)
       .then(() => {res.json("success")})
       .catch(err => {
@@ -76,10 +76,9 @@ app.route('/pin')
     });
   });
 
-const { ipfs } = require("./lib/setup/ipfs.js");
+// HANDLE TRANSACTION
 const { Pin, Cid } = require("./lib/setup/mongoose.js");
 const { ethers } = require("ethers");
-// HANDLE TRANSACTION
 app.post('/transaction', (req, res) => {
   const { contractMetadata, hash, cipher } = req.body;
 
@@ -91,20 +90,17 @@ app.post('/transaction', (req, res) => {
 
   const contract = new ethers.Contract(contractMetadata.contract, contractMetadata.abi, provider);
 
-  const query = { plain: hash, cipher: cipher, contract: JSON.stringify(contractMetadata) };
   contract.expirationDates(cipher).then(expBigNum => {
     const expDate = parseInt(expBigNum.toString());
     if (expDate === 0) { 
-      ipfs.pin.rm(hash).then(pin => { 
-        console.log("Removed Pin @ " + pin);
-        Pin.deleteOne({cipher: cipher}).then(() => {
-          Cid.deleteOne({cipher: cipher}).then(() => {
-            res.json("err: failure to pay");
-          }).catch((err) => {res.json("err: Cid.deleteOne @ app.post('/transaction') || ", err)});
-        }).catch((err) => {res.json("err: Pin.deleteOne @ app.post('/transaction') || ", err)});
-      });
+      unpin(hash, cipher, res)
+        .then(() => {res.json("success")})
+        .catch(err => {
+          console.log(err);
+          res.json("err: unpin @ app.post('/transaction')");
+        });
     } else {
-      Pin.updateOne(query, {expDate: expDate}, (err) => {
+      Pin.updateOne({ plain: hash, cipher: cipher }, {expDate: expDate}, (err) => {
         if (err) { res.json("err: Pin.updateOne @ app.post('/transaction') || ", err) } 
         else { res.json("success") }
       });
@@ -129,16 +125,17 @@ app.post('/decipher', (req, res) => {
       else res.json(foundCid.secret);
     });
   }
-  returnSecret();
+  
   // verifyMessage({ cipher, address, signature }).then((verdict) => {
   //   if (verdict !== true) { res.json("failure") }
   //   else {
-
+  returnSecret();
   //   }
   // });
 });
 
 // DECRYPT CIPHER
+const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
