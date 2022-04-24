@@ -121,8 +121,9 @@ app.post('/decipher', (req, res) => {
   const { cipher } = req.body;
   function returnSecret() {
     Cid.findOne({cipher: cipher}, (err, foundCid) => {
+      const secret = foundCid.secret;
       if (err) res.json("err: Cid.findOne @ app.post('/decipher') || ", err);
-      else res.json(foundCid.secret);
+      else res.json(secret);
     });
   }
   
