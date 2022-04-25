@@ -7,6 +7,7 @@ const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
 const { uploadEncrypted, saveAndValidate, updatePin, unpin } = require("./lib/utils/deadDrop.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
+const { getProvider, getContract, verifyMessage } = require("./lib/utils/blockchain.js");
 
 function decomposeUploadInput(chunk, chunkIndex, totalChunks) {
   const chunkIdx = parseInt(chunkIndex);
@@ -105,17 +106,9 @@ app.route('/pin')
 
 
 // HANDLE TRANSACTION
-const { ethers } = require("ethers");
 app.post('/transaction', (req, res) => {
   const { contractMetadata, hash, cipher } = req.body;
-
-  const chainId = parseInt(contractMetadata.chainId, 16);
-  const isDev = (chainId === 31337 || chainId === 1337);
-  const provider = isDev ? 
-    new ethers.providers.JsonRpcProvider() : 
-    new ethers.providers.JsonRpcProvider(/*FILL ME IN*/);
-
-  const contract = new ethers.Contract(contractMetadata.contract, contractMetadata.abi, provider);
+  const contract = getContract(contractMetadata.contract, contractMetadata.abi, contractMetadata.chainId);
 
   contract.expirationDates(cipher).then(rawExpDate => {
     const expDate = parseInt(rawExpDate.toString());
@@ -136,11 +129,10 @@ app.post('/transaction', (req, res) => {
 
 // DECRYPT CIPHER
 const { Pin, Cid } = require("./lib/setup/mongoose.js");
-const { verifyMessage } = require('./lib/utils/blockchain.js');
 app.post('/decipher', (req, res) => {
-  const { cipher } = req.body;
+  const { cipher, signature } = req.body;
   if (cipher !== undefined && cipher !== null) {
-    verifyMessage({ cipher, address, signature }).then((verdict) => {
+    verifyMessage(cipher, signature).then((verdict) => {
       if (verdict === true) {
         Cid.findOne({cipher: cipher}).then((found, err) => {
           if (err) res.json("err: Cid.findOne @ app.post('/decipher')");
@@ -156,7 +148,7 @@ app.post('/decipher', (req, res) => {
 
 
 // BACKEND TODO 
-// - message verification
+// - batch message verification
 // - implement bcrypt on ciphers
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
