@@ -107,7 +107,7 @@ app.post('/transaction', (req, res) => {
 // TODO 
 // - implement message verification
 // BACKEND 
-// get rid of mongoose encryption
+// - implement bcrypt on ciphers
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
 
@@ -121,7 +121,7 @@ app.post('/decipher', (req, res) => {
   //   if (verdict !== true) { res.json("err: signature failure @ app.post('/decipher')") }
   //   else {
       Cid.findOne({cipher: cipher}).then((found, err) => {
-        if (err) res.json("err: Cid.findOne @ app.post('/decipher') || " + err);
+        if (err) res.json("err: Cid.findOne @ app.post('/decipher')");
         else {
           const secret = found.secret;
           res.json(secret);
@@ -137,8 +137,8 @@ const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
-  Pin.findOne({cipher: cipher}, (founPin, err) => {
-    if (err) res.json("err: Pin.findOne @ app.post('/download') || "+err);
+  Pin.findOne({cipher: cipher}, (foundPin, err) => {
+    if (err) res.json("err: Pin.findOne @ app.post('/download')");
     else {
       const cidString = foundPin.plain;
       console.log(cidString); // COMMENT ME BEFORE PROD
