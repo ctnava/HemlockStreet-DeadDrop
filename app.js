@@ -112,7 +112,7 @@ app.post('/transaction', (req, res) => {
 // - Figure out Download from IPFS
 
 // DECRYPT CIPHER
-// const { verifyMessage } = require('./lib/utils/blockchain.js');
+const { verifyMessage } = require('./lib/utils/blockchain.js');
 app.post('/decipher', (req, res) => {
   const { cipher } = req.body;
   
@@ -137,24 +137,26 @@ const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
-  Pin.findOne({cipher: cipher}, (foundPin, err) => {
-    if (err) res.json("err: Pin.findOne @ app.post('/download')");
-    else {
-      const cidString = foundPin.plain;
-      console.log(cidString); // COMMENT ME BEFORE PROD
-      const cid = CID.parse(cidString);
+  if (cipher !== undefined && cipher !== null) {
+    Pin.findOne({cipher: cipher}, (foundPin, err) => {
+      if (err) res.json("err: Pin.findOne @ app.post('/download')");
+      else {
+        const cidString = foundPin.plain;
+        console.log(cidString); // COMMENT ME BEFORE PROD
+        const cid = CID.parse(cidString);
 
-      if (fs.existsSync(`./downloads/${cidString}.zip`)) fs.unlinkSync(`./downloads/${cidString}.zip`);
+        if (fs.existsSync(`./downloads/${cidString}.zip`)) fs.unlinkSync(`./downloads/${cidString}.zip`);
 
-      async function getData() {
-        let asyncitr = ipfs.get(cid);
-        for await (const itr of asyncitr) {
-          console.log(itr);
-          fs.appendFileSync(`./downloads/${cidString}.zip`, Buffer.from(itr));
+        async function getData() {
+          let asyncitr = ipfs.get(cid);
+          for await (const itr of asyncitr) {
+            console.log(itr);
+            fs.appendFileSync(`./downloads/${cidString}.zip`, Buffer.from(itr));
+          }
         }
+        
+        getData().then(() => {res.json("success")});
       }
-      
-      getData().then(() => {res.json("success")});
-    }
-  });
+    });
+  } else res.json("err: empty cipher @ app.post('/download')");
 })
