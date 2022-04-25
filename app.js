@@ -5,9 +5,38 @@ const { app } = require("./lib/setup/app.js");
 const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
 const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
-const { uploadEncrypted, saveAndValidate, updatePin, unpin } = require("./lib/routes/deadDrop/models.js");
-const { decomposeUploadInput, showProgress } = require("./lib/routes/deadDrop/upload.js");
+const { uploadEncrypted, saveAndValidate, updatePin, unpin } = require("./lib/utils/deadDrop.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
+
+function decomposeUploadInput(chunk, chunkIndex, totalChunks) {
+  const chunkIdx = parseInt(chunkIndex);
+  const chunkNum = (chunkIdx + 1);
+  const chunkTotal = parseInt(totalChunks);
+  const percentProgress = (chunkNum / chunkTotal) * 100; 
+  const isFirstChunk = (chunkIdx === 0 && chunkNum === 1);
+  const isLastChunk = (chunkIdx === (chunkTotal - 1)) && (chunkNum === chunkTotal);
+
+  const chunkData = chunk.split(',')[1];
+  const chunkBuffer = (Buffer.from(chunkData, 'base64'));
+
+  const decomposed = {
+      idx: chunkIdx,
+      num: chunkNum,
+      tot: chunkTotal,
+
+      isFirst: isFirstChunk,
+      isLast: isLastChunk,
+
+      percent: percentProgress,
+
+      contents: chunkBuffer
+  };
+  return decomposed;
+}
+
+function showProgress(num, total, percent) {
+  console.log(`Getting Chunk ${num} of ${total} || ${percent}%`);
+}
 
 // PROCESS INCOMING FILES
 app.route('/upload')
@@ -74,7 +103,6 @@ app.route('/pin')
   });
 
 // HANDLE TRANSACTION
-const { Pin, Cid } = require("./lib/setup/mongoose.js");
 const { ethers } = require("ethers");
 app.post('/transaction', (req, res) => {
   const { contractMetadata, hash, cipher } = req.body;
@@ -103,12 +131,9 @@ app.post('/transaction', (req, res) => {
   });
 });
 
-// BACKEND TODO 
-// - implement bcrypt on ciphers
-// - File corrupts just before upload to IPFS is complete (delay deletion?)
-// - Figure out Download from IPFS
 
 // DECRYPT CIPHER
+const { Pin, Cid } = require("./lib/setup/mongoose.js");
 app.post('/decipher', (req, res) => {
   const { cipher } = req.body;
   
@@ -124,6 +149,10 @@ app.post('/decipher', (req, res) => {
 });
 
 
+// BACKEND TODO 
+// - implement bcrypt on ciphers
+// - File corrupts just before upload to IPFS is complete (delay deletion?)
+// - Figure out Download from IPFS
 const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
