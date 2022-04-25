@@ -136,22 +136,27 @@ app.post('/transaction', (req, res) => {
 
 // DECRYPT CIPHER
 const { Pin, Cid } = require("./lib/setup/mongoose.js");
+const { verifyMessage } = require('./lib/utils/blockchain.js');
 app.post('/decipher', (req, res) => {
   const { cipher } = req.body;
-  
   if (cipher !== undefined && cipher !== null) {
-    Cid.findOne({cipher: cipher}).then((found, err) => {
-      if (err) res.json("err: Cid.findOne @ app.post('/decipher')");
-      else {
-        const secret = found.secret;
-        res.json(secret);
-      }
+    verifyMessage({ cipher, address, signature }).then((verdict) => {
+      if (verdict === true) {
+        Cid.findOne({cipher: cipher}).then((found, err) => {
+          if (err) res.json("err: Cid.findOne @ app.post('/decipher')");
+          else {
+            const secret = found.secret;
+            res.json(secret);
+          }
+        });
+      } else res.json("err: signature failure @ app.post('/decipher')");
     });
   } else res.json("err: empty cipher @ app.post('/decipher')");
 });
 
 
 // BACKEND TODO 
+// - message verification
 // - implement bcrypt on ciphers
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
