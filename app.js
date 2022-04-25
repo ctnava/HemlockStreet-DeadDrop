@@ -4,13 +4,13 @@ const { initAll } = require("./lib/setup/all.js"); initAll();
 const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
 const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
-const { uploadEncrypted, saveAndValidate, unpin } = require("./lib/utils/routes/pin.js");
+const { uploadEncrypted, saveAndValidate, updatePin, unpin } = require("./lib/routes/deadDrop/models.js");
+const { decomposeUploadInput, showProgress } = require("./lib/routes/deadDrop/upload.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
 const { app } = require("./lib/setup/app.js");
 
 
 // PROCESS INCOMING FILES
-const { decomposeUploadInput, showProgress } = require("./lib/utils/routes/upload.js");
 app.route('/upload')
   .post((req, res) => {
     const { ext, chunk, chunkIndex, totalChunks } = JSON.parse(req.body.toString());
@@ -68,11 +68,9 @@ app.route('/pin')
   .delete((req, res) => {
     const { hash, cipher } = req.body;
     // console.log(req.body);
-    unpin(hash, cipher, res)
-      .then(() => {res.json("success")})
-      .catch(err => {
-        console.log(err);
-        res.json("err: unpin @ app.post('/unpin')");
+    unpin(hash, cipher).then(success => {
+      if (success === true) res.json("success");
+      else res.json("err: unpin @ app.post('/unpin')");
     });
   });
 
@@ -90,58 +88,57 @@ app.post('/transaction', (req, res) => {
 
   const contract = new ethers.Contract(contractMetadata.contract, contractMetadata.abi, provider);
 
-  contract.expirationDates(cipher).then(expBigNum => {
-    const expDate = parseInt(expBigNum.toString());
+  contract.expirationDates(cipher).then(rawExpDate => {
+    const expDate = parseInt(rawExpDate.toString());
     if (expDate === 0) { 
-      unpin(hash, cipher, res)
-        .then(() => {res.json("success")})
-        .catch(err => {
-          console.log(err);
-          res.json("err: unpin @ app.post('/transaction')");
-        });
+      unpin(hash, cipher).then(success => {
+        if (success === true) res.json("err: failure to pay");
+        else res.json("err: unpin @ app.post('/unpin')");
+      });
     } else {
-      Pin.updateOne({ plain: hash, cipher: cipher }, {expDate: expDate}, (err) => {
-        if (err) { res.json("err: Pin.updateOne @ app.post('/transaction') || ", err) } 
-        else { res.json("success") }
+      updatePin(cipher, expDate).then(success => {
+        if (success === true) res.json("success");
+        else res.json("err: updatePin @ app.post('/unpin')");
       });
     }
   });
 });
 
 // TODO 
-// FRONTEND - add extensions for time
-// BACKEND 
 // - implement message verification
+// BACKEND 
+// get rid of mongoose encryption
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
-// - implement clientside decryption
 
+// DECRYPT CIPHER
 // const { verifyMessage } = require('./lib/utils/blockchain.js');
 app.post('/decipher', (req, res) => {
   const { cipher } = req.body;
-  function returnSecret() {
-    Cid.findOne({cipher: cipher}, (err, foundCid) => {
-      const secret = foundCid.secret;
-      if (err) res.json("err: Cid.findOne @ app.post('/decipher') || ", err);
-      else res.json(secret);
-    });
-  }
   
+  if (cipher !== undefined && cipher !== null) {
   // verifyMessage({ cipher, address, signature }).then((verdict) => {
-  //   if (verdict !== true) { res.json("failure") }
+  //   if (verdict !== true) { res.json("err: signature failure @ app.post('/decipher')") }
   //   else {
-  returnSecret();
+      Cid.findOne({cipher: cipher}).then((found, err) => {
+        if (err) res.json("err: Cid.findOne @ app.post('/decipher') || " + err);
+        else {
+          const secret = found.secret;
+          res.json(secret);
+        }
+      });
   //   }
   // });
+  } else res.json("err: empty cipher @ app.post('/decipher')");
 });
 
-// DECRYPT CIPHER
+
 const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
-  Pin.findOne({cipher: cipher}, (err, foundPin) => {
-    if (err) res.json("err: Pin.findOne @ app.post('/download') || ", err);
+  Pin.findOne({cipher: cipher}, (founPin, err) => {
+    if (err) res.json("err: Pin.findOne @ app.post('/download') || "+err);
     else {
       const cidString = foundPin.plain;
       console.log(cidString); // COMMENT ME BEFORE PROD
