@@ -128,14 +128,14 @@ app.post('/transaction', (req, res) => {
 
 
 // DECRYPT CIPHER
-const { Pin, Cid } = require("./lib/setup/mongoose.js");
+const { Pin } = require("./lib/setup/mongoose.js");
 app.post('/decipher', (req, res) => {
   const { cipher, signature } = req.body;
   if (cipher !== undefined && cipher !== null) {
     verifyMessage(cipher, signature).then((verdict) => {
       if (verdict === true) {
-        Cid.findOne({cipher: cipher}).then((found, err) => {
-          if (err) res.json("err: Cid.findOne @ app.post('/decipher')");
+        Pin.findOne({cipher: cipher}).then((found, err) => {
+          if (err) res.json("err: Pin.findOne @ app.post('/decipher')");
           else {
             const secret = found.secret;
             res.json(secret);
