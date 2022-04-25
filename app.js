@@ -38,6 +38,7 @@ function showProgress(num, total, percent) {
   console.log(`Getting Chunk ${num} of ${total} || ${percent}%`);
 }
 
+
 // PROCESS INCOMING FILES
 app.route('/upload')
   .post((req, res) => {
@@ -102,6 +103,7 @@ app.route('/pin')
     });
   });
 
+
 // HANDLE TRANSACTION
 const { ethers } = require("ethers");
 app.post('/transaction', (req, res) => {
@@ -153,6 +155,7 @@ app.post('/decipher', (req, res) => {
 // - implement bcrypt on ciphers
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
+// - DB sweeps
 const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
