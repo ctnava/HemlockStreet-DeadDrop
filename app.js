@@ -1,14 +1,13 @@
 require('dotenv').config();
 const fs = require('fs');
 const { initAll } = require("./lib/setup/all.js"); initAll();
+const { app } = require("./lib/setup/app.js");
 const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
 const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
 const { uploadEncrypted, saveAndValidate, updatePin, unpin } = require("./lib/routes/deadDrop/models.js");
 const { decomposeUploadInput, showProgress } = require("./lib/routes/deadDrop/upload.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
-const { app } = require("./lib/setup/app.js");
-
 
 // PROCESS INCOMING FILES
 app.route('/upload')
@@ -104,31 +103,23 @@ app.post('/transaction', (req, res) => {
   });
 });
 
-// TODO 
-// - implement message verification
-// BACKEND 
+// BACKEND TODO 
 // - implement bcrypt on ciphers
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
 
 // DECRYPT CIPHER
-const { verifyMessage } = require('./lib/utils/blockchain.js');
 app.post('/decipher', (req, res) => {
   const { cipher } = req.body;
   
   if (cipher !== undefined && cipher !== null) {
-  // verifyMessage({ cipher, address, signature }).then((verdict) => {
-  //   if (verdict !== true) { res.json("err: signature failure @ app.post('/decipher')") }
-  //   else {
-      Cid.findOne({cipher: cipher}).then((found, err) => {
-        if (err) res.json("err: Cid.findOne @ app.post('/decipher')");
-        else {
-          const secret = found.secret;
-          res.json(secret);
-        }
-      });
-  //   }
-  // });
+    Cid.findOne({cipher: cipher}).then((found, err) => {
+      if (err) res.json("err: Cid.findOne @ app.post('/decipher')");
+      else {
+        const secret = found.secret;
+        res.json(secret);
+      }
+    });
   } else res.json("err: empty cipher @ app.post('/decipher')");
 });
 
