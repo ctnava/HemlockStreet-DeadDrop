@@ -144,7 +144,6 @@ app.post('/decipher', (req, res) => {
 // - batch message verification
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
-// - DB sweeps
 const { Pin } = require("./lib/setup/mongoose.js");
 const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
