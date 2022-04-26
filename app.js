@@ -175,16 +175,17 @@ app.post('/download', (req, res) => {
 });
 
 var activeSweep = false;
+const { sweepDB } = require("./lib/utils/cleanup.js");
 app.post("/sweep", (req, res) => {
   if (activeSweep === true) res.json('err: already active');
-  else activeSweep = true;
-  async function listAllPins(){
-    for await (const { cid, type } of ipfs.pin.ls()) {
-      console.log({ cid, type })
-      const removed = await ipfs.pin.rm(cid);
-      console.log("Removed Pin @ " + removed);
-    }
-    activeSweep = false;
+  else {
+    activeSweep = true;
+    sweepDB().then((success)=>{
+      activeSweep = false;
+      if (success === false) res.json("err: searchDB @ app.post('/sweep')");
+      else {
+        res.json("success");
+      }
+    });
   }
-  listAllPins().then(()=>{res.json("success")});
 });
