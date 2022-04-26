@@ -172,4 +172,19 @@ app.post('/download', (req, res) => {
       }
     });
   } else res.json("err: empty cipher @ app.post('/download')");
-})
+});
+
+var activeSweep = false;
+app.post("/sweep", (req, res) => {
+  if (activeSweep === true) res.json('err: already active');
+  else activeSweep = true;
+  async function listAllPins(){
+    for await (const { cid, type } of ipfs.pin.ls()) {
+      console.log({ cid, type })
+      const removed = await ipfs.pin.rm(cid);
+      console.log("Removed Pin @ " + removed);
+    }
+    activeSweep = false;
+  }
+  listAllPins().then(()=>{res.json("success")});
+});
