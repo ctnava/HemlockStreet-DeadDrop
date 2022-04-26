@@ -5,7 +5,7 @@ const { app } = require("./lib/setup/app.js");
 const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
 const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
-const { uploadEncrypted, saveAndValidate, updatePin, unpin } = require("./lib/utils/deadDrop.js");
+const { uploadEncrypted, saveAndValidate, updatePin, unpin, extractKey } = require("./lib/utils/deadDrop.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
 const { getProvider, getContract, verifyMessage } = require("./lib/utils/blockchain.js");
 
@@ -128,19 +128,12 @@ app.post('/transaction', (req, res) => {
 
 
 // DECRYPT CIPHER
-const { Pin } = require("./lib/setup/mongoose.js");
 app.post('/decipher', (req, res) => {
   const { cipher, signature } = req.body;
   if (cipher !== undefined && cipher !== null) {
     verifyMessage(cipher, signature).then((verdict) => {
       if (verdict === true) {
-        Pin.findOne({cipher: cipher}).then((found, err) => {
-          if (err) res.json("err: Pin.findOne @ app.post('/decipher')");
-          else {
-            const secret = found.secret;
-            res.json(secret);
-          }
-        });
+        extractKey(cipher, res);
       } else res.json("err: signature failure @ app.post('/decipher')");
     });
   } else res.json("err: empty cipher @ app.post('/decipher')");
@@ -149,10 +142,10 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
-// - implement bcrypt on ciphers
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
 // - DB sweeps
+const { Pin } = require("./lib/setup/mongoose.js");
 const { ipfs } = require("./lib/setup/ipfs.js");
 const { CID } = require("multiformats/cid");
 app.post('/download', (req, res) => {
