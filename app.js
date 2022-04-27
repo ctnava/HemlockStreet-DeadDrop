@@ -142,7 +142,6 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
-// - finish cleanup protocol
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
 const { Pin } = require("./lib/setup/mongoose.js");
