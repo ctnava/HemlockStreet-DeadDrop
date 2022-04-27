@@ -173,7 +173,7 @@ app.post('/download', (req, res) => {
   } else res.json("err: empty cipher @ app.post('/download')");
 });
 
-var activeSweep = false;
+var activeSweep = false; // cleanup downloads/uploads folder
 const { sweepDB } = require("./lib/utils/cleanup.js");
 app.post("/sweep", (req, res) => {
   if (activeSweep === true) res.json('err: already active');
