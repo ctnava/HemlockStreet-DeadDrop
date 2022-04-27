@@ -142,6 +142,7 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
+// - finish cleanup protocol
 // - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
 const { Pin } = require("./lib/setup/mongoose.js");
@@ -174,11 +175,12 @@ app.post('/download', (req, res) => {
 });
 
 var activeSweep = false; // cleanup downloads/uploads folder
-const { sweepDB } = require("./lib/utils/cleanup.js");
+const { sweepDB, sweepDownloads } = require("./lib/utils/cleanup.js");
 app.post("/sweep", (req, res) => {
   if (activeSweep === true) res.json('err: already active');
   else {
     activeSweep = true;
+    sweepDownloads();
     sweepDB().then((success)=>{
       activeSweep = false;
       if (success === false) res.json("err: searchDB @ app.post('/sweep')");
