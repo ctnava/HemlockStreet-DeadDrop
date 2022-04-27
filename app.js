@@ -142,11 +142,10 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
-// - File corrupts just before upload to IPFS is complete (delay deletion?)
 // - Figure out Download from IPFS
+// - cleanup downloads folder
 const { Pin } = require("./lib/setup/mongoose.js");
-const { ipfs } = require("./lib/setup/ipfs.js");
-const { CID } = require("multiformats/cid");
+const { ipfs, CID } = require("./lib/setup/ipfs.js");
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
   if (cipher !== undefined && cipher !== null) {
@@ -173,7 +172,7 @@ app.post('/download', (req, res) => {
   } else res.json("err: empty cipher @ app.post('/download')");
 });
 
-var activeSweep = false; // cleanup downloads/uploads folder
+var activeSweep = false; 
 const { sweepDB, sweepDownloads } = require("./lib/utils/cleanup.js");
 app.post("/sweep", (req, res) => {
   if (activeSweep === true) res.json('err: already active');
