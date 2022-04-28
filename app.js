@@ -5,81 +5,34 @@ const { app } = require("./lib/setup/app.js");
 const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
 const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
-const { uploadEncrypted, saveAndValidate, updatePin, unpin, extractKey } = require("./lib/utils/deadDrop.js");
+const { decomposeFile, uploadEncrypted, saveAndValidate, updatePin, unpin, extractKey } = require("./lib/utils/deadDrop.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
 const { getContract, verifyMessage } = require("./lib/utils/blockchain.js");
 
-function decomposeUploadInput(chunk, chunkIndex, totalChunks) {
-  const chunkIdx = parseInt(chunkIndex);
-  const chunkNum = (chunkIdx + 1);
-  const chunkTotal = parseInt(totalChunks);
-  const percentProgress = (chunkNum / chunkTotal) * 100; 
-  const isFirstChunk = (chunkIdx === 0 && chunkNum === 1);
-  const isLastChunk = (chunkIdx === (chunkTotal - 1)) && (chunkNum === chunkTotal);
 
-  const chunkData = chunk.split(',')[1];
-  const chunkBuffer = (Buffer.from(chunkData, 'base64'));
-
-  const decomposed = {
-      idx: chunkIdx,
-      num: chunkNum,
-      tot: chunkTotal,
-
-      isFirst: isFirstChunk,
-      isLast: isLastChunk,
-
-      percent: percentProgress,
-
-      contents: chunkBuffer
-  };
-  return decomposed;
-}
-
-function showProgress(num, total, percent) {
-  console.log(`Getting Chunk ${num} of ${total} || ${percent}%`);
-}
-
-
-// PROCESS INCOMING FILES
 app.route('/upload')
   .post((req, res) => {
     const { ext, chunk, chunkIndex, totalChunks } = JSON.parse(req.body.toString());
     // idx, num, tot, isFirst, isLast, percent, contents
-    const dataChunk = decomposeUploadInput(chunk, chunkIndex, totalChunks);
-    // showProgress(dataChunk.num, dataChunk.idx, dataChunk.percent);
+    const dataChunk = decomposeFile(chunk, chunkIndex, totalChunks);
+    // console.log(`Getting Chunk ${dataChunk.num} of ${dataChunk.total} || ${dataChunk.percent}%`);
 
     // tmp, prev, trash, zip
     const nameFor = uploadLabels(ext, req.ip, totalChunks); 
     const pathTo = uploadPaths(nameFor);
     
-    if (dataChunk.isFirst) {
-      if (fs.existsSync(pathTo.tmp)) {
-        // console.log("Duplicate Deleted!");
-        fs.unlinkSync(pathTo.tmp); 
-      }
-      // console.log("Downloading Document...");
-    }
-
+    const shouldDelete = (dataChunk.isFirst && fs.existsSync(pathTo.tmp));
+    if (shouldDelete === true) fs.unlinkSync(pathTo.tmp);
     fs.appendFileSync(pathTo.tmp, dataChunk.contents);
 
     if (dataChunk.isLast) {
-      // console.log("Document Downloaded!");
       fs.renameSync(pathTo.tmp, pathTo.prev);
-    }
-    
-    // clientside needs update here to fix
-    if (dataChunk.isLast) {
-      const finalName = nameFor.prev;
-      res.json({finalName});
-    } else {
-      const tmpName = nameFor.tmp;
-      res.json({tmpName});
-    }
+      res.json({finalName: nameFor.prev});
+    } else res.json({tmpName: nameFor.tmp});
   })
   .delete((req, res) => {deleteFiles(req.body.fileName, "upload", res)});
 
 
-// ENCRYPT THE FILE, UPLOAD TO IPFS, ENCRYPT THE CONTRACT INPUTS, DATABASE THE PIN, AND THEN RETURN THE ENCRYPTED DATA + PATH
 app.route('/pin')
   .post((req, res) => {
     const { fileName, contractMetadata, contractInput } = req.body;
