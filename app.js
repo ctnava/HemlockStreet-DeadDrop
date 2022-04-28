@@ -7,7 +7,7 @@ const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
 const { uploadEncrypted, saveAndValidate, updatePin, unpin, extractKey } = require("./lib/utils/deadDrop.js");
 const { deleteFiles } = require("./lib/utils/deletion.js");
-const { getProvider, getContract, verifyMessage } = require("./lib/utils/blockchain.js");
+const { getContract, verifyMessage } = require("./lib/utils/blockchain.js");
 
 function decomposeUploadInput(chunk, chunkIndex, totalChunks) {
   const chunkIdx = parseInt(chunkIndex);
@@ -142,14 +142,15 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
-// - Downloaded files are unencrypted zip files???
-// - cleanup downloads folder
+// - unzip w/ pw
+// - ipfs create error handling
 const { Pin } = require("./lib/setup/mongoose.js");
-const { ipfs } = require("./lib/setup/ipfs.js");
+const { createIpfsClient } = require("./lib/utils/ipfs.js");
 const { quickDecrypt } = require("./lib/utils/encryption.js");
 const altKey = process.env.ALT_KEY;
-// const unzip = require('unzipper');
-const AdmZip = require('adm-zip');
+const unzipper = require('unzipper');
+const makeIpfsFetch = require('js-ipfs-fetch');
+// const AdmZip = require('adm-zip');
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
   // console.log(cipher);
@@ -159,44 +160,30 @@ app.post('/download', (req, res) => {
       if (err) res.json("err: Pin.findOne @ app.post('/download')");
       else {
         const cid = foundPin.plain;
+        const secret = foundPin.secret;
 
-        const tmpFile = `./downloads/tmp_${cid}.zip`;
-        if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+        const pathToZip = `./downloads/${cid}.zip`;
+        if (fs.existsSync(pathToZip)) fs.unlinkSync(pathToZip);
 
-        const zipFile = `./downloads/${cid}.zip`;
-        if (fs.existsSync(zipFile)) fs.unlinkSync(zipFile);
-
-        const exportDir = `./downloads/${cid}`;
+        const exportDir = `./downloads/decrypted/${cid}`;
         if (fs.existsSync(exportDir)) fs.rmSync(exportDir, {recursive: true});
         fs.mkdirSync(exportDir);
-        // console.log(__dirname + `/downloads/${cid}`);
 
         async function getData() {
-          let asyncitr = ipfs.get(cid);
-          for await (const itr of asyncitr) {
-            // console.log(itr);
-            fs.appendFileSync(tmpFile, Buffer.from(itr));
-          }
+          const ipfs = await createIpfsClient();
+          const fetch = await makeIpfsFetch({ipfs});
+          const fakeResponse = await fetch(`ipfs://${cid}`, {method: 'GET'});
+          for await (const itr of fakeResponse.body) fs.appendFileSync(pathToZip, Buffer.from(itr));
+
+          const zip = await unzipper.Open.file(pathToZip);
+          var desiredIdx = 0;
+          zip.files.forEach((file, idx) => {if (file.path !== 'garbage.trash') desiredIdx = idx});
+          const desiredEntry = zip.files[desiredIdx];
+          const extractedFile = await desiredEntry.buffer(secret);
+          fs.appendFileSync(exportDir + 'desired.pdf', extractedFile);
         }
-        
-        getData().then(async () => {
-          // var readStream = fs.createReadStream(tmpFile);
-          // var filesDone = 0;
-          // function writer() {
-          //   var delayStream = new Stream.Transform();
-          //   delayStream._transform = (d,e,cb) => {setTimeout(cb, 500)};
-          //   delayStream._flush = (cb) => {
-          //     filesDone += 1;
-          //     cb();
-          //     delayStream.emit('close');
-          //   }
-          //   return delayStream;
-          // }
-          // var unzipExtractor = unzip.Extract({getWriter: writer, path: __dirname + `/downloads/${cid}/locked.zip`});
-          // await readStream.pipe(unzipExtractor);
-          var zip = new AdmZip(tmpFile);
-          var zipEntries = zip.getEntries(); // INVALID CEN_HEADER
-          console.log(zipEntries);
+
+        getData().then(() => { 
           res.json("success");
         });
       }
@@ -205,14 +192,12 @@ app.post('/download', (req, res) => {
 });
 
 var activeSweep = false; 
-const { sweepDB, sweepDownloads } = require("./lib/utils/cleanup.js");
-const exp = require('constants');
-const { Stream } = require('stream');
+const { sweepDB, sweepFiles } = require("./lib/utils/cleanup.js");
 app.post("/sweep", (req, res) => {
   if (activeSweep === true) res.json('err: already active');
   else {
     activeSweep = true;
-    sweepDownloads();
+    sweepFiles();
     sweepDB().then((success)=>{
       activeSweep = false;
       if (success === false) res.json("err: searchDB @ app.post('/sweep')");
@@ -222,3 +207,4 @@ app.post("/sweep", (req, res) => {
     });
   }
 });
+
