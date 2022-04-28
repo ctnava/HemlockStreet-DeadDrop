@@ -185,12 +185,12 @@ app.post('/download', (req, res) => {
           zip.files.forEach((file, idx) => {if (file.path !== 'garbage.trash') desiredIdx = idx});
           const desiredEntry = zip.files[desiredIdx];
 
-          const extractedFile = await desiredEntry.buffer(secret);
-          fs.appendFileSync(exportDir + 'desired.pdf', extractedFile);
+          // const extractedFile = await desiredEntry.buffer(secret);
+          // fs.appendFileSync(exportDir + 'desired.pdf', extractedFile);
         }
 
         decryptZip().then(() => { 
-          res.json("success");
+          res.status(200).json("success");
         });
       }
     });
