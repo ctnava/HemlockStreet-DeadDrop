@@ -120,6 +120,6 @@ app.post('/decipher', (req, res) => {
 // - ipfs create error handling + ipfs close needed?
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
-  if (cipher !== undefined && cipher !== null) getFile(cipher, res);
-  else res.json("err: empty cipher @ app.post('/download')");
+  if (cipher === undefined || cipher === null) res.json("err: empty cipher @ app.post('/download')");
+  else getFile(cipher, res).then(()=>{res.status(200).json("success")});
 });
