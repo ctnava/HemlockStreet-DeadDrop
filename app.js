@@ -148,6 +148,8 @@ const { Pin } = require("./lib/setup/mongoose.js");
 const { ipfs } = require("./lib/setup/ipfs.js");
 const { quickDecrypt } = require("./lib/utils/encryption.js");
 const altKey = process.env.ALT_KEY;
+// const unzip = require('unzipper');
+const AdmZip = require('adm-zip');
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
   // console.log(cipher);
@@ -156,20 +158,47 @@ app.post('/download', (req, res) => {
     Pin.findOne({cipher: unhashed}, (err, foundPin) => {
       if (err) res.json("err: Pin.findOne @ app.post('/download')");
       else {
-        console.log("Found pin!")
         const cid = foundPin.plain;
 
-        if (fs.existsSync(`./downloads/${cid}.zip`)) fs.unlinkSync(`./downloads/${cid}.zip`);
+        const tmpFile = `./downloads/tmp_${cid}.zip`;
+        if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+
+        const zipFile = `./downloads/${cid}.zip`;
+        if (fs.existsSync(zipFile)) fs.unlinkSync(zipFile);
+
+        const exportDir = `./downloads/${cid}`;
+        if (fs.existsSync(exportDir)) fs.rmSync(exportDir, {recursive: true});
+        fs.mkdirSync(exportDir);
+        // console.log(__dirname + `/downloads/${cid}`);
 
         async function getData() {
           let asyncitr = ipfs.get(cid);
           for await (const itr of asyncitr) {
-            console.log(itr);
-            fs.appendFileSync(`./downloads/${cid}.zip`, Buffer.from(itr));
+            // console.log(itr);
+            fs.appendFileSync(tmpFile, Buffer.from(itr));
           }
         }
         
-        getData().then(() => {res.json("success")});
+        getData().then(async () => {
+          // var readStream = fs.createReadStream(tmpFile);
+          // var filesDone = 0;
+          // function writer() {
+          //   var delayStream = new Stream.Transform();
+          //   delayStream._transform = (d,e,cb) => {setTimeout(cb, 500)};
+          //   delayStream._flush = (cb) => {
+          //     filesDone += 1;
+          //     cb();
+          //     delayStream.emit('close');
+          //   }
+          //   return delayStream;
+          // }
+          // var unzipExtractor = unzip.Extract({getWriter: writer, path: __dirname + `/downloads/${cid}/locked.zip`});
+          // await readStream.pipe(unzipExtractor);
+          var zip = new AdmZip(tmpFile);
+          var zipEntries = zip.getEntries(); // INVALID CEN_HEADER
+          console.log(zipEntries);
+          res.json("success");
+        });
       }
     });
   } else res.json("err: empty cipher @ app.post('/download')");
@@ -177,6 +206,8 @@ app.post('/download', (req, res) => {
 
 var activeSweep = false; 
 const { sweepDB, sweepDownloads } = require("./lib/utils/cleanup.js");
+const exp = require('constants');
+const { Stream } = require('stream');
 app.post("/sweep", (req, res) => {
   if (activeSweep === true) res.json('err: already active');
   else {
