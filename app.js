@@ -143,7 +143,7 @@ app.post('/decipher', (req, res) => {
 // BACKEND TODO 
 // - batch message verification
 // - unzip w/ pw
-// - ipfs create error handling
+// - ipfs create error handling + ipfs close needed?
 const { Pin } = require("./lib/setup/mongoose.js");
 const { createIpfsClient } = require("./lib/utils/ipfs.js");
 const { quickDecrypt } = require("./lib/utils/encryption.js");
@@ -169,21 +169,27 @@ app.post('/download', (req, res) => {
         if (fs.existsSync(exportDir)) fs.rmSync(exportDir, {recursive: true});
         fs.mkdirSync(exportDir);
 
-        async function getData() {
+        async function getZip() {
           const ipfs = await createIpfsClient();
           const fetch = await makeIpfsFetch({ipfs});
           const fakeResponse = await fetch(`ipfs://${cid}`, {method: 'GET'});
           for await (const itr of fakeResponse.body) fs.appendFileSync(pathToZip, Buffer.from(itr));
 
           const zip = await unzipper.Open.file(pathToZip);
+          return zip;
+        }
+
+        async function decryptZip() {
+          const zip = await getZip();
           var desiredIdx = 0;
           zip.files.forEach((file, idx) => {if (file.path !== 'garbage.trash') desiredIdx = idx});
           const desiredEntry = zip.files[desiredIdx];
+
           const extractedFile = await desiredEntry.buffer(secret);
           fs.appendFileSync(exportDir + 'desired.pdf', extractedFile);
         }
 
-        getData().then(() => { 
+        decryptZip().then(() => { 
           res.json("success");
         });
       }
