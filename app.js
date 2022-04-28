@@ -6,8 +6,21 @@ const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
 const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
 const { decomposeFile, uploadEncrypted, saveAndValidate, updatePin, unpin, extractKey } = require("./lib/utils/deadDrop.js");
-const { deleteFiles } = require("./lib/utils/deletion.js");
 const { getContract, verifyMessage } = require("./lib/utils/blockchain.js");
+const { deleteFiles, performSweep } = require("./lib/utils/cleanup.js");
+
+var activeSweep = false; 
+app.post("/sweep", (req, res) => {
+  if (activeSweep === true) res.json('err: already active');
+  else {
+    activeSweep = true;
+    performSweep().then((success)=>{
+      activeSweep = false;
+      if (success === true) res.json("success");
+      else res.json("err: searchDB @ app.post('/sweep')"); 
+    });
+  }
+});
 
 
 app.route('/upload')
@@ -58,7 +71,6 @@ app.route('/pin')
   });
 
 
-// HANDLE TRANSACTION
 app.post('/transaction', (req, res) => {
   const { contractMetadata, hash, cipher } = req.body;
   const contract = getContract(contractMetadata.contract, contractMetadata.abi, contractMetadata.chainId);
@@ -80,7 +92,6 @@ app.post('/transaction', (req, res) => {
 });
 
 
-// DECRYPT CIPHER
 app.post('/decipher', (req, res) => {
   const { cipher, signature } = req.body;
   if (cipher !== undefined && cipher !== null) {
@@ -139,18 +150,3 @@ app.post('/download', (req, res) => {
     });
   } else res.json("err: empty cipher @ app.post('/download')");
 });
-
-var activeSweep = false; 
-const { performSweep } = require("./lib/utils/cleanup.js");
-app.post("/sweep", (req, res) => {
-  if (activeSweep === true) res.json('err: already active');
-  else {
-    activeSweep = true;
-    performSweep().then((success)=>{
-      activeSweep = false;
-      if (success === true) res.json("success");
-      else res.json("err: searchDB @ app.post('/sweep')"); 
-    });
-  }
-});
-
