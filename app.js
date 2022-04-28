@@ -5,7 +5,17 @@ const { app } = require("./lib/setup/app.js");
 const { uploadPaths, uploadedPaths } = require("./lib/utils/dirs.js");
 const { uploadLabels, uploadedLabels } = require("./lib/utils/labels.js");
 const { garble } = require("./lib/utils/encryption");
-const { decomposeFile, uploadEncrypted, saveAndValidate, updatePin, unpin, extractKey } = require("./lib/utils/deadDrop.js");
+
+const { 
+  decomposeFile, 
+  uploadEncrypted, 
+  saveAndValidate, 
+  updatePin, 
+  unpin, 
+  extractKey, 
+  getFile 
+} = require("./lib/utils/deadDrop.js");
+
 const { getContract, verifyMessage } = require("./lib/utils/blockchain.js");
 const { deleteFiles, performSweep } = require("./lib/utils/cleanup.js");
 
@@ -106,47 +116,10 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
-// - unzip w/ pw
+// - unzip w/ pw ADD SIG VERIFICATION
 // - ipfs create error handling + ipfs close needed?
-const { Pin } = require("./lib/setup/mongoose.js");
-const { createAndFetch } = require("./lib/utils/ipfs.js");
-const { quickDecrypt } = require("./lib/utils/encryption.js");
-const altKey = process.env.ALT_KEY;
-const unzipper = require('unzipper');
-// const AdmZip = require('adm-zip');
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
-  // console.log(cipher);
-  if (cipher !== undefined && cipher !== null) {
-    const unhashed = quickDecrypt(cipher, altKey);
-    Pin.findOne({cipher: unhashed}, (err, foundPin) => {
-      if (err) res.json("err: Pin.findOne @ app.post('/download')");
-      else {
-        const cid = foundPin.plain;
-        const secret = foundPin.secret;
-
-        const pathToZip = `./downloads/${cid}.zip`;
-        if (fs.existsSync(pathToZip)) fs.unlinkSync(pathToZip);
-
-        const exportDir = `./downloads/decrypted/${cid}`;
-        if (fs.existsSync(exportDir)) fs.rmSync(exportDir, {recursive: true});
-        fs.mkdirSync(exportDir);
-
-        async function decryptZip() {
-          await createAndFetch(cid, pathToZip);
-          const zip = await unzipper.Open.file(pathToZip);
-          var desiredIdx = 0;
-          zip.files.forEach((file, idx) => {if (file.path !== 'garbage.trash') desiredIdx = idx});
-          const desiredEntry = zip.files[desiredIdx];
-
-          // const extractedFile = await desiredEntry.buffer(secret);
-          // fs.appendFileSync(exportDir + 'desired.pdf', extractedFile);
-        }
-
-        decryptZip().then(() => { 
-          res.status(200).json("success");
-        });
-      }
-    });
-  } else res.json("err: empty cipher @ app.post('/download')");
+  if (cipher !== undefined && cipher !== null) getFile(cipher, res);
+  else res.json("err: empty cipher @ app.post('/download')");
 });
