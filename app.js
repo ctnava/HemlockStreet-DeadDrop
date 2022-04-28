@@ -142,27 +142,30 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
-// - Figure out Download from IPFS
+// - Downloaded files are unencrypted zip files???
 // - cleanup downloads folder
 const { Pin } = require("./lib/setup/mongoose.js");
-const { ipfs, CID } = require("./lib/setup/ipfs.js");
+const { ipfs } = require("./lib/setup/ipfs.js");
+const { quickDecrypt } = require("./lib/utils/encryption.js");
+const altKey = process.env.ALT_KEY;
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
+  // console.log(cipher);
   if (cipher !== undefined && cipher !== null) {
-    Pin.findOne({cipher: cipher}, (foundPin, err) => {
+    const unhashed = quickDecrypt(cipher, altKey);
+    Pin.findOne({cipher: unhashed}, (err, foundPin) => {
       if (err) res.json("err: Pin.findOne @ app.post('/download')");
       else {
-        const cidString = foundPin.plain;
-        console.log(cidString); // COMMENT ME BEFORE PROD
-        const cid = CID.parse(cidString);
+        console.log("Found pin!")
+        const cid = foundPin.plain;
 
-        if (fs.existsSync(`./downloads/${cidString}.zip`)) fs.unlinkSync(`./downloads/${cidString}.zip`);
+        if (fs.existsSync(`./downloads/${cid}.zip`)) fs.unlinkSync(`./downloads/${cid}.zip`);
 
         async function getData() {
           let asyncitr = ipfs.get(cid);
           for await (const itr of asyncitr) {
             console.log(itr);
-            fs.appendFileSync(`./downloads/${cidString}.zip`, Buffer.from(itr));
+            fs.appendFileSync(`./downloads/${cid}.zip`, Buffer.from(itr));
           }
         }
         
