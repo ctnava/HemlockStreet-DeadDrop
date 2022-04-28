@@ -149,7 +149,6 @@ const { createAndFetch } = require("./lib/utils/ipfs.js");
 const { quickDecrypt } = require("./lib/utils/encryption.js");
 const altKey = process.env.ALT_KEY;
 const unzipper = require('unzipper');
-const makeIpfsFetch = require('js-ipfs-fetch');
 // const AdmZip = require('adm-zip');
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
@@ -189,18 +188,15 @@ app.post('/download', (req, res) => {
 });
 
 var activeSweep = false; 
-const { sweepDB, sweepFiles } = require("./lib/utils/cleanup.js");
+const { performSweep } = require("./lib/utils/cleanup.js");
 app.post("/sweep", (req, res) => {
   if (activeSweep === true) res.json('err: already active');
   else {
     activeSweep = true;
-    sweepFiles();
-    sweepDB().then((success)=>{
+    performSweep().then((success)=>{
       activeSweep = false;
-      if (success === false) res.json("err: searchDB @ app.post('/sweep')");
-      else {
-        res.json("success");
-      }
+      if (success === true) res.json("success");
+      else res.json("err: searchDB @ app.post('/sweep')"); 
     });
   }
 });
