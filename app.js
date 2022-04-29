@@ -117,7 +117,8 @@ app.post('/decipher', (req, res) => {
 // BACKEND TODO 
 // - batch message verification
 // - unzip w/ pw ADD SIG VERIFICATION
-// - ipfs create error handling + ipfs close needed?
+// - ipfs close needed?
+// - ipfs/rmPins resolves too quickly
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
   if (cipher === undefined || cipher === null) res.json("err: empty cipher @ app.post('/download')");
