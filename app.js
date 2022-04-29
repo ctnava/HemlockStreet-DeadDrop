@@ -116,9 +116,9 @@ app.post('/decipher', (req, res) => {
 
 // BACKEND TODO 
 // - batch message verification
-// - unzip w/ pw ADD SIG VERIFICATION
 // - ipfs close needed?
 // - ipfs/rmPins resolves too quickly
+// - corrupted uploads
 app.post('/download', (req, res) => {
   const { cipher, signature, fileName } = req.body;
   console.log(req.body);
