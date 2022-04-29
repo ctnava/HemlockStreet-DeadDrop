@@ -95,7 +95,6 @@ app.post('/transaction', (req, res) => {
       });
     } else {
       updatePin(cipher, expDate).then(success => {
-        console.log("outer", success);
         if (success === true) res.json("success");
         else res.json("err: updatePin @ app.post('/transaction')");
       });
@@ -123,5 +122,5 @@ app.post('/decipher', (req, res) => {
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
   if (cipher === undefined || cipher === null) res.json("err: empty cipher @ app.post('/download')");
-  else getFile(cipher, res).then(()=>{res.status(200).json("success")});
+  else getFile(cipher, res);
 });
