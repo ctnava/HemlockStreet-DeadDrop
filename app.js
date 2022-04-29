@@ -120,10 +120,21 @@ app.post('/decipher', (req, res) => {
 // - ipfs close needed?
 // - ipfs/rmPins resolves too quickly
 app.post('/download', (req, res) => {
-  const { cipher } = req.body;
-  if (cipher === undefined || cipher === null) res.json("err: empty cipher @ app.post('/download')");
-  else getFile(cipher).then(success => {
-    if (success === true) res.status(200).json("success");
-    else res.json("err: Pin.findOne @ app.post('/download')");
-  })
+  const { cipher, signature, fileName } = req.body;
+  console.log(req.body);
+  const emptyInputs = (cipher === undefined || cipher === null) ||
+  (signature === undefined || signature === null) ||
+  (fileName === 'undefined.undefined');
+  if (emptyInputs) res.json("err: empty cipher @ app.post('/download')");
+  else {
+    verifyMessage(cipher, signature).then((verdict) => {
+        if (verdict !== true) res.json("err: signature failure @ app.post('/download')");
+        else {
+          getFile(cipher, fileName).then(success => {
+            if (success === true) res.status(200).json("success");
+            else res.json("err: Pin.findOne @ app.post('/download')");
+          });
+        }
+    });
+  }
 });
