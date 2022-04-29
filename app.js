@@ -121,7 +121,7 @@ app.post('/decipher', (req, res) => {
 // - corrupted uploads
 app.post('/download', (req, res) => {
   const { cipher, signature, fileName } = req.body;
-  console.log(req.body);
+  // console.log(req.body);
   const emptyInputs = (cipher === undefined || cipher === null) ||
   (signature === undefined || signature === null) ||
   (fileName === 'undefined.undefined' || fileName === undefined || fileName === null);
@@ -130,8 +130,8 @@ app.post('/download', (req, res) => {
     verifyMessage(cipher, signature).then((verdict) => {
         if (verdict !== true) res.json("err: signature failure @ app.post('/download')");
         else {
-          getFile(cipher, fileName).then(success => {
-            if (success === true) res.status(200).json("success");
+          getFile(cipher, fileName).then(cid => {
+            if (cid !== false) res.status(200).json(`${cid}`);
             else res.json("err: Pin.findOne @ app.post('/download')");
           });
         }
