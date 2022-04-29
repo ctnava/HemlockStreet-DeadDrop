@@ -124,7 +124,7 @@ app.post('/download', (req, res) => {
   console.log(req.body);
   const emptyInputs = (cipher === undefined || cipher === null) ||
   (signature === undefined || signature === null) ||
-  (fileName === 'undefined.undefined');
+  (fileName === 'undefined.undefined' || fileName === undefined || fileName === null);
   if (emptyInputs) res.json("err: empty cipher @ app.post('/download')");
   else {
     verifyMessage(cipher, signature).then((verdict) => {
