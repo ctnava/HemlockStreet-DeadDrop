@@ -65,7 +65,6 @@ app.route('/pin')
     const secret = garble(127);
     console.log("secret", secret); // COMMENT ME BEFORE PROD
     uploadEncrypted(fileName, secret).then(cid => {
-      // if (fs.existsSync(pathTo.zip)) fs.unlinkSync(pathTo.zip);
       if (fs.existsSync(pathTo.trash)) fs.unlinkSync(pathTo.trash);
       if (fs.existsSync(pathTo.file)) fs.unlinkSync(pathTo.file);
       const entry = [cid, JSON.stringify(contractMetadata), contractInput, secret];
@@ -122,5 +121,8 @@ app.post('/decipher', (req, res) => {
 app.post('/download', (req, res) => {
   const { cipher } = req.body;
   if (cipher === undefined || cipher === null) res.json("err: empty cipher @ app.post('/download')");
-  else getFile(cipher, res);
+  else getFile(cipher).then(success => {
+    if (success === true) res.status(200).json("success");
+    else res.json("err: Pin.findOne @ app.post('/download')");
+  })
 });
