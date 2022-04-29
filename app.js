@@ -65,8 +65,9 @@ app.route('/pin')
     const secret = garble(127);
     console.log("secret", secret); // COMMENT ME BEFORE PROD
     uploadEncrypted(fileName, secret).then(cid => {
-      fs.unlinkSync(pathTo.trash);
-      fs.unlinkSync(pathTo.file);
+      // if (fs.existsSync(pathTo.zip)) fs.unlinkSync(pathTo.zip);
+      if (fs.existsSync(pathTo.trash)) fs.unlinkSync(pathTo.trash);
+      if (fs.existsSync(pathTo.file)) fs.unlinkSync(pathTo.file);
       const entry = [cid, JSON.stringify(contractMetadata), contractInput, secret];
       saveAndValidate(entry, res);
     });
@@ -90,12 +91,13 @@ app.post('/transaction', (req, res) => {
     if (expDate === 0) { 
       unpin(hash, cipher).then(success => {
         if (success === true) res.json("err: failure to pay");
-        else res.json("err: unpin @ app.post('/unpin')");
+        else res.json("err: unpin @ app.post('/transaction')");
       });
     } else {
       updatePin(cipher, expDate).then(success => {
+        console.log("outer", success);
         if (success === true) res.json("success");
-        else res.json("err: updatePin @ app.post('/unpin')");
+        else res.json("err: updatePin @ app.post('/transaction')");
       });
     }
   });
