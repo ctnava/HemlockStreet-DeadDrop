@@ -122,7 +122,7 @@ app.post('/extension', (req, res) => {
 
 app.post('/decipher', (req, res) => {
   const { cipher, signature } = req.body;
-  console.log(req.body);
+  // console.log(req.body);
   if (cipher !== undefined && cipher !== null) {
     verifyMessage(cipher, signature).then((verdict) => {
       if (verdict === true) {
@@ -138,7 +138,7 @@ app.post('/decipher', (req, res) => {
 // - corrupted uploads (temp fixed)
 app.post('/download', (req, res) => {
   const { cipher, signature, fileName } = req.body;
-  console.log(req.body);
+  // console.log(req.body);
   const emptyInputs = (cipher === undefined || cipher === null) ||
   (signature === undefined || signature === null) ||
   (fileName === 'undefined.undefined' || fileName === undefined || fileName === null);
