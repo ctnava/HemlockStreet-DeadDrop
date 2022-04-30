@@ -102,6 +102,24 @@ app.post('/transaction', (req, res) => {
 });
 
 
+app.post('/extension', (req, res) => {
+  const { contractMetadata, cipher } = req.body;
+  // console.log(req.body);
+  const contract = getContract(contractMetadata.contract, contractMetadata.abi, contractMetadata.chainId);
+
+  contract.expirationDates(cipher).then(rawExpDate => {
+    const expDate = parseInt(rawExpDate.toString());
+    if (expDate !== 0) {
+      // console.log(expDate);
+      updatePin(cipher, expDate).then(success => {
+        if (success === true) res.json("success");
+        else res.json("err: updatePin @ app.post('/extension')");
+      });
+    }
+  });
+});
+
+
 app.post('/decipher', (req, res) => {
   const { cipher, signature } = req.body;
   console.log(req.body);
