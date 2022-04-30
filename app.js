@@ -59,11 +59,11 @@ app.route('/upload')
 app.route('/pin')
   .post((req, res) => {
     const { fileName, contractMetadata, contractInput } = req.body;
-    console.log(contractInput);
+    // console.log(contractInput);
     const nameOf = uploadedLabels(fileName);
     const pathTo = uploadedPaths(nameOf);
     const secret = garble(127);
-    console.log("secret", secret); // COMMENT ME BEFORE PROD
+    // console.log("secret", secret); // COMMENT ME BEFORE PROD
     uploadEncrypted(fileName, secret).then(cid => {
       if (fs.existsSync(pathTo.trash)) fs.unlinkSync(pathTo.trash);
       if (fs.existsSync(pathTo.file)) fs.unlinkSync(pathTo.file);
