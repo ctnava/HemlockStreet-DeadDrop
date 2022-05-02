@@ -1,0 +1,30 @@
+{
+    "url": "moralis.io",
+    
+    "dataCenters": ["speedy-nodes-nyc"],
+    
+    "endPoints": {
+        "1": "eth/mainnet",
+        "3": "eth/ropsten",
+        "4": "eth/rinkeby",
+        "42": "eth/kovan",
+        "420": "eth/goerli",
+
+        "56": "bsc/mainnet",
+        "97": "bsc/testnet",
+
+        "137": "polygon/mainnet",
+        "80001": "polygon/mumbai",
+
+        "42161": "arbitrum/mainnet",
+        "421611": "arbitrum/testnet",
+
+        "43114": "avalanche/mainnet",
+        "43113": "avalanche/testnet",
+
+        "250": "fantom/mainnet"
+    },
+
+    "template": "https://${moralis.dataCenters[0]}.${moralis.url}/${process.env.MORALIS_KEY}/${moralis.endpoints['1']}", 
+    "toArchive": "${template}/archive"
+}
