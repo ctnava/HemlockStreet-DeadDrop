@@ -8,6 +8,13 @@ Change package.json
 ```
 rename
 "@chilkat/ck-node16-win64" to "@chilkat/ck-node16-linux64"
+
+change sitRep @ app.post("/report") in ("./lib/routes").maintenanceRoutes
+to 
+{ 
+    port: process.env.PORT,
+    ipfs: version
+}
 ```
 ### Changed .env Vars?
 Set App > Settings > Config Vars
