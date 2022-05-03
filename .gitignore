@@ -1,7 +1,7 @@
 /node_modules
-npm-debug.log
-.DS_Store
-/*.env
 /uploads
 /downloads
-/new-app-42069
+/*.env
+npm-debug.log
+.DS_Store
+package-lock.json
