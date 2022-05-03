@@ -8,7 +8,7 @@
   },
   "author": "",
   "license": "ISC",
-  "devDependencies": {
+  "dependencies": {
     "@chilkat/ck-node16-win64": "^9.50.90",
     "archiver": "^5.3.1",
     "archiver-zip-encrypted": "^1.0.11",
