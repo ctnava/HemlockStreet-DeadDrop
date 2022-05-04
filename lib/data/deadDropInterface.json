@@ -4,19 +4,13 @@
     ],
     "abi": [
         {
-            "inputs": [
-                {"internalType": "string", "name": "", "type": "string"}
-            ],
+            "inputs": [{"internalType": "string", "name": "", "type": "string"}],
             "name": "expirationDates",
-            "outputs": [
-                {"internalType": "uint256", "name": "", "type": "uint256" }
-            ],
+            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256" }],
             "stateMutability": "view",
             "type": "function"
         }, {
-            "inputs": [
-                {"internalType": "string", "name": "query", "type": "string"}
-            ],
+            "inputs": [{"internalType": "string", "name": "query", "type": "string"}],
             "name": "getAddresses",
             "outputs": [
                 {"internalType": "address", "name": "from", "type": "address"},
