@@ -1,14 +1,14 @@
 {
-  "name": "restserver",
+  "name": "hemlock-street-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "Hemlock Street REST Server",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon app",
+    "api": "nodemon app",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@chilkat/ck-node16-win64": "^9.50.90",
     "archiver": "^5.3.1",
